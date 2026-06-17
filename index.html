@@ -1114,7 +1114,20 @@ function renderAgenda(){
       } else {
         const t=SESSION_TYPES[e.type]||SESSION_TYPES.muscu,prog=e.muscuProgKey?MUSCU_PROGRAMS[e.muscuProgKey]:null;
         const color=prog?prog.color:t.color,icon=prog?prog.icon:t.icon,label=prog?prog.label:t.label;
-        html+=`<div style="background:#1E2330;border:1px solid #2A3040;border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:18px">${icon}</span><div style="flex:1"><div style="font-weight:600;font-size:13px">${label}${e.auto?" ·auto":""}</div><div style="font-size:12px;color:#6B7385">${e.heure?e.heure+" · ":""}${e.duree?e.duree+"min":""}${e.type==="kine"&&e.kinePraticien?" · "+e.kinePraticien:""}${e.type==="terrain"&&e.focus?" · "+e.focus:""}</div></div><div style="width:8px;height:8px;border-radius:50%;background:${color}"></div></div>`;
+        const exArrAg=Array.isArray(e.exercices)?e.exercices:(e.exercices?e.exercices.split("|"):[]);
+        const hasChargesAg=chargesLog.some(c=>c.sessionId==e.id);
+        html+=`<div onclick="openSessionDetail('${e.id}','${e._kind}')" style="background:#1E2330;border:1px solid ${color}33;border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;cursor:pointer">
+          <span style="font-size:20px">${icon}</span>
+          <div style="flex:1">
+            <div style="font-weight:600;font-size:13px">${label}${e.auto?` <span style="font-size:10px;color:#6B7385">(auto)</span>`:""}</div>
+            <div style="font-size:12px;color:#6B7385;margin-top:2px">${e.heure?e.heure+" · ":""}${e.duree?e.duree+" min":""}${e.type==="kine"&&e.kinePraticien?" · "+e.kinePraticien:""}${e.type==="terrain"&&e.focus?" · "+e.focus:""}</div>
+            ${e.notes?`<div style="font-size:11px;color:#6B7385;margin-top:2px;font-style:italic">${e.notes}</div>`:""}
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:4px">
+            <span style="font-size:16px;color:#6B7385">›</span>
+            ${exArrAg.length?`<div style="font-size:10px;color:${hasChargesAg?"#1ABC9C":"#4A90E2"}">${hasChargesAg?"✅":"📋 "+exArrAg.length+"ex"}</div>`:""}
+          </div>
+        </div>`;
       }
     });
     html+=`</div>`;
