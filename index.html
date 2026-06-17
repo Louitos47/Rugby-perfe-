@@ -1056,7 +1056,7 @@ Si Louis demande de créer/générer/ajouter une séance ou un match, dis-lui de
       method:"POST",
       headers:{
         "Content-Type":"application/json",
-        "x-api-key":"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",
+        "x-api-key":"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",
         "anthropic-version":"2023-06-01",
         "anthropic-dangerous-direct-browser-access":"true"
       },
@@ -1810,7 +1810,7 @@ Utilise toujours des emojis dans tes messages. Sois chaleureux et encourage Loui
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-api-key": "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",
+        "x-api-key": "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",
         "anthropic-version": "2023-06-01",
         "anthropic-dangerous-direct-browser-access": "true"
       },
@@ -1869,6 +1869,50 @@ Utilise toujours des emojis dans tes messages. Sois chaleureux et encourage Loui
         save("rp_sessions", sessions);
         render();
       }
+    }
+
+    if(result.action === "modify_session" && result.data){
+      const d = result.data;
+      let modified = false;
+
+      // Try sessions first
+      const newSessions = sessions.map(s=>{
+        if(s.date===d.date && s.type===d.type){
+          modified = true;
+          const prog = d.muscuProgKey ? ({...MUSCU_PROGRAMS,...MUSCU_PROGRAMS_ETE}[d.muscuProgKey]) : null;
+          return {
+            ...s,
+            muscuProgKey: d.muscuProgKey || s.muscuProgKey,
+            exercices: d.exercices || (prog ? prog.exercices : s.exercices),
+            duree: prog ? prog.duree : s.duree,
+            notes: d.notes || s.notes,
+          };
+        }
+        return s;
+      });
+
+      // Try autoSessions if not found
+      const newAuto = autoSessions.map(s=>{
+        if(s.date===d.date && s.type===d.type){
+          modified = true;
+          const prog = d.muscuProgKey ? ({...MUSCU_PROGRAMS,...MUSCU_PROGRAMS_ETE}[d.muscuProgKey]) : null;
+          return {
+            ...s,
+            muscuProgKey: d.muscuProgKey || s.muscuProgKey,
+            exercices: d.exercices || (prog ? prog.exercices : s.exercices),
+            duree: prog ? prog.duree : s.duree,
+            notes: d.notes || s.notes,
+            auto: false, // no longer auto since modified
+          };
+        }
+        return s;
+      });
+
+      sessions = newSessions;
+      autoSessions = newAuto;
+      save("rp_sessions", sessions);
+      save("rp_auto", autoSessions);
+      render();
     }
 
     if(result.action === "delete_session" && result.data){
