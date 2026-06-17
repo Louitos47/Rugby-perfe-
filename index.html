@@ -110,6 +110,21 @@ input,textarea,select{outline:none;font-family:inherit}
 /* ICS EXPORT BTN */
 .ics-btn{width:100%;background:#161A23;border:1px solid rgba(200,255,0,.3);border-radius:10px;padding:12px;color:#C8FF00;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px}
 
+/* SEASON */
+.period-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:16px}
+.period-btn{border-radius:12px;padding:12px 8px;text-align:center;border:2px solid #2A3040;background:#161A23;cursor:pointer;transition:all .15s}
+.period-btn.active{border-width:2px}
+.period-icon{font-size:24px;margin-bottom:4px}
+.period-label{font-size:11px;font-weight:700;line-height:1.3}
+.week-card{background:#1E2330;border:1px solid #2A3040;border-radius:12px;overflow:hidden;margin-bottom:10px}
+.week-day{padding:12px 15px;display:flex;align-items:center;gap:12px;border-bottom:1px solid #2A3040}
+.week-day:last-child{border-bottom:none}
+.week-day-label{font-size:12px;font-weight:700;color:#6B7385;width:70px;flex-shrink:0}
+.week-day-info{flex:1}
+.week-day-title{font-size:13px;font-weight:600}
+.week-day-desc{font-size:11px;color:#6B7385;margin-top:2px}
+.week-day-btn{background:none;border:1px solid #2A3040;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;color:#6B7385}
+
 /* CHARGES */
 .ex-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
 .ex-btn{background:#161A23;border:1px solid #2A3040;border-radius:10px;padding:12px 10px;text-align:left;transition:all .15s;cursor:pointer}
@@ -125,6 +140,20 @@ input,textarea,select{outline:none;font-family:inherit}
 .prog-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
 .prog-bar-inner{width:100%;border-radius:4px 4px 0 0;min-height:4px;transition:height .3s}
 .prog-bar-lbl{font-size:9px;color:#6B7385;text-align:center}
+
+/* COACH VIEW */
+.coach-view{display:flex;flex-direction:column;height:calc(100vh - 140px)}
+.coach-messages{flex:1;overflow-y:auto;padding-bottom:10px;display:flex;flex-direction:column;gap:10px}
+.coach-msg{padding:12px 15px;border-radius:14px;font-size:14px;line-height:1.6;max-width:90%}
+.coach-msg.user{background:#C8FF0022;color:#C8FF00;align-self:flex-end;border:1px solid #C8FF0044;border-radius:14px 14px 4px 14px}
+.coach-msg.assistant{background:#1E2330;color:#E8ECF0;align-self:flex-start;border:1px solid #2A3040;border-radius:14px 14px 14px 4px}
+.coach-msg.loading{color:#6B7385;font-style:italic}
+.coach-input-wrap{background:#161A23;border-top:1px solid #2A3040;padding:12px 16px;padding-bottom:calc(12px + env(safe-area-inset-bottom));display:flex;gap:8px;align-items:flex-end}
+.coach-textarea{flex:1;background:#0D0F14;border:1px solid #2A3040;border-radius:12px;color:#E8ECF0;padding:10px 13px;font-size:14px;resize:none;min-height:44px;max-height:120px;line-height:1.4}
+.coach-send{background:#C8FF00;color:#000;border:none;border-radius:10px;padding:10px 14px;font-weight:800;font-size:18px;height:44px;flex-shrink:0}
+.coach-send:disabled{background:#2A3040;color:#6B7385}
+.quick-btns{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px}
+.quick-btn{background:#1E2330;border:1px solid #2A3040;border-radius:20px;padding:6px 12px;font-size:12px;color:#6B7385;font-weight:600;white-space:nowrap}
 
 /* AI ASSISTANT */
 .ai-fab{position:fixed;bottom:80px;right:16px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#C8FF00,#8BB000);border:none;font-size:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(200,255,0,.4);z-index:99;cursor:pointer;transition:transform .15s}
@@ -220,6 +249,44 @@ const EXERCISES = [
 
 const EX_CATS = {force:"🦵 Force inf.",explosif:"⚡ Explosivité",haut:"💪 Haut du corps",core:"🧱 Gainage"};
 
+const SEASON_PERIODS = {
+  ete:{
+    label:"Préparation estivale",icon:"🌞",color:"#F39C12",
+    desc:"Pas de match — on tape fort ! Volume élevé, charges lourdes.",
+    days:{
+      lundi:{key:"ete_force",label:"Force / Puissance",icon:"⚡"},
+      mercredi:{key:"ete_cardio",label:"Cardio / Explosivité",icon:"💨"},
+      vendredi:{key:"ete_volume",label:"Volume / Hypertrophie",icon:"💪"},
+    }
+  },
+  saison:{
+    label:"Pleine saison",icon:"🏉",color:"#C8FF00",
+    desc:"Match le weekend — intensité modulée selon le calendrier.",
+    days:{
+      lundi:{key:"phase3_recup",label:"Récup active",icon:"🌊"},
+      mercredi:{key:"phase3_force",label:"Force / Puissance",icon:"⚡"},
+      vendredi:{key:"phase3_activation",label:"Activation pré-match",icon:"🔋"},
+    }
+  },
+  basse:{
+    label:"Saison basse",icon:"💤",color:"#4A90E2",
+    desc:"Coupure — récupération, entretien, mobilité.",
+    days:{
+      lundi:{key:"phase1_mobilite",label:"Mobilité & gainage",icon:"🧘"},
+      mercredi:{key:"recup_volume",label:"Volume entretien",icon:"💪"},
+      vendredi:{key:"phase1_mobilite",label:"Mobilité & gainage",icon:"🧘"},
+    }
+  },
+};
+
+const MUSCU_PROGRAMS_ETE = {
+  ete_force:{label:"Force / Puissance",icon:"⚡",color:"#F39C12",duree:75,exercices:["Squat barre — 5×5 lourd (charge max semaine)","Hip Thrust — 4×6 explosif","Soulevé de terre — 4×5","Développé militaire — 4×6","Fentes bulgares lestées — 3×8/jambe","Gainage planche — 3×1min"]},
+  ete_cardio:{label:"Cardio / Explosivité",icon:"💨",color:"#1ABC9C",duree:60,exercices:["Sprints 10m/20m/30m — 4 séries chaque","Squat jump — 4×8 explosif","Changements direction 5-10-5 — 8 reps","Box Jump — 4×8","Foulées bondissantes lestées — 4×20m","Vélo HIIT 10min finisher"]},
+  ete_volume:{label:"Volume / Hypertrophie",icon:"💪",color:"#4A90E2",duree:70,exercices:["Développé couché — 4×10","Tirage horizontal — 4×12","Leg Press — 4×12","Romanian Deadlift — 4×10","Tirage vertical — 4×12","Ab Wheel — 4×12","Good Morning — 3×12"]},
+};
+
+// MUSCU_PROGRAMS_ETE merged below via spread
+
 const INJURY_PHASES = {
   phase1:{label:"Phase 1 — Immobilisation",sublabel:"Bas du corps + bras gauche uniquement",color:C.red,icon:"🩹",endDate:"2025-06-26"},
   phase2:{label:"Phase 2 — Rééducation",sublabel:"Kiné intensif + reprise progressive",color:C.orange,icon:"🔄",endDate:"2025-07-06"},
@@ -247,6 +314,7 @@ let sessions      = load("rp_sessions");
 let matches       = load("rp_matches");
 let autoSessions  = load("rp_auto");
 let chargesLog    = load("rp_charges", []);
+let seasonPeriod  = load("rp_season", "ete");
 let currentView   = "dashboard";
 let editingItem   = null;
 let calMonth      = today().slice(0,7);
@@ -324,13 +392,46 @@ function exportICS(events,filename){
 function render(){
   renderNav();
   renderPhaseBadge();
-  const views={dashboard:renderDashboard,planning:renderPlanning,charges:renderCharges,kine:renderKine,calendar:renderCalendar,stats:renderStats};
+  const views={dashboard:renderDashboard,agenda:renderAgenda,programme:renderProgramme,planning:renderPlanning,charges:renderCharges,kine:renderKine,calendar:renderCalendar,stats:renderStats,coach:renderCoach};
   document.getElementById("content").innerHTML=(views[currentView]||renderDashboard)();
 }
 
+let showMoreMenu = false;
+const moreTabs = [{id:"stats",icon:"📊",label:"Stats"},{id:"kine",icon:"🩺",label:"Kiné"},{id:"planning",icon:"📅",label:"Matchs"},{id:"charges",icon:"🏋️",label:"Charges"},{id:"calendar",icon:"🗓️",label:"Calendrier"}];
+
 function renderNav(){
-  const tabs=[{id:"dashboard",icon:"🏠",label:"Home"},{id:"planning",icon:"📅",label:"Saison"},{id:"charges",icon:"🏋️",label:"Charges"},{id:"kine",icon:"🩺",label:"Kiné"},{id:"calendar",icon:"🗓️",label:"Agenda"}];
-  document.getElementById("nav").innerHTML=tabs.map(t=>`<button class="nav-btn ${currentView===t.id?"active":""}" onclick="setView('${t.id}')"><span class="nav-icon">${t.icon}</span>${t.label}</button>`).join("");
+  const mainTabs=[
+    {id:"dashboard",icon:"🏠",label:"Home"},
+    {id:"agenda",icon:"🗓️",label:"Agenda"},
+    {id:"programme",icon:"💪",label:"Programme"},
+    {id:"coach",icon:"🤖",label:"Coach"},
+    {id:"more",icon:"···",label:"Plus"},
+  ];
+  const isMore = moreTabs.some(t=>t.id===currentView);
+  document.getElementById("nav").innerHTML=mainTabs.map(t=>{
+    const isActive = t.id==="more" ? isMore : currentView===t.id;
+    return `<button class="nav-btn ${isActive?"active":""}" onclick="${t.id==="more"?"toggleMore()":"setView('"+t.id+"')"}">
+      <span class="nav-icon" style="${t.id==="more"?"font-size:14px;letter-spacing:3px":""}">${t.icon}</span>${t.label}
+    </button>`;
+  }).join("");
+
+  let moreMenu = document.getElementById("more-menu");
+  if(!moreMenu){
+    moreMenu = document.createElement("div");
+    moreMenu.id = "more-menu";
+    moreMenu.style.cssText = "position:fixed;bottom:65px;right:0;left:0;max-width:600px;margin:0 auto;background:#161A23;border-top:1px solid #2A3040;padding:12px 16px;z-index:99;display:none";
+    document.getElementById("app").appendChild(moreMenu);
+  }
+  moreMenu.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px">`+moreTabs.map(t=>`
+    <button onclick="setView('${t.id}');toggleMore()" style="display:inline-flex;align-items:center;gap:8px;background:${currentView===t.id?"#C8FF0018":"#1E2330"};border:1px solid ${currentView===t.id?"#C8FF00":"#2A3040"};border-radius:10px;padding:10px 14px;color:${currentView===t.id?"#C8FF00":"#E8ECF0"};font-size:13px;font-weight:600">
+      <span style="font-size:16px">${t.icon}</span>${t.label}
+    </button>`).join("")+`</div>`;
+  moreMenu.style.display = showMoreMenu ? "block" : "none";
+}
+
+function toggleMore(){
+  showMoreMenu = !showMoreMenu;
+  renderNav();
 }
 
 function renderPhaseBadge(){
@@ -338,7 +439,7 @@ function renderPhaseBadge(){
   document.getElementById("phase-badge").innerHTML=`<span style="color:${ph.color}">${ph.icon} ${ph.label.split("—")[0].trim()}</span>`;
 }
 
-function setView(v){ currentView=v; render(); }
+function setView(v){ currentView=v; showMoreMenu=false; render(); }
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderDashboard(){
@@ -407,7 +508,7 @@ function renderSessionCard(s){
         <span class="session-icon">${icon}</span>
         <div>
           <div>${tag(color,label)}${s.auto?tag(C.muted,"Auto"):""}</div>
-          <div class="session-meta">${fmt(s.date)}${s.duree?" · "+s.duree+" min":""}</div>
+          <div class="session-meta">${fmt(s.date)}${s.heure?" · "+s.heure:""}${s.duree?" · "+s.duree+" min":""}</div>
         </div>
       </div>
       <div class="session-actions">
@@ -433,9 +534,600 @@ function renderSessionCard(s){
   return html;
 }
 
+
+// ── SESSION DETAIL MODAL ──────────────────────────────────────────────────────
+function openSessionDetail(id, kind){
+  const s = kind==="auto"
+    ? autoSessions.find(x=>x.id==id)
+    : sessions.find(x=>x.id==id) || autoSessions.find(x=>x.id==id);
+  if(!s) return;
+
+  const t = SESSION_TYPES[s.type]||SESSION_TYPES.muscu;
+  const prog = s.muscuProgKey ? ({...MUSCU_PROGRAMS,...MUSCU_PROGRAMS_ETE}[s.muscuProgKey]) : null;
+  const color = prog?prog.color:t.color;
+  const icon = prog?prog.icon:t.icon;
+  const label = prog?prog.label:t.label;
+  const exArr = Array.isArray(s.exercices)?s.exercices:(s.exercices?s.exercices.split("|"):[]);
+  const hasCharges = chargesLog.some(c=>c.sessionId==id);
+
+  let html = `
+  <div style="display:flex;align-items:center;gap:12px;margin-bottom:16px">
+    <span style="font-size:28px">${icon}</span>
+    <div>
+      <div style="font-size:18px;font-weight:800;color:${color}">${label}</div>
+      <div style="font-size:13px;color:#6B7385;margin-top:2px">${fmtFull(s.date)}${s.heure?" · "+s.heure:""}${s.duree?" · "+s.duree+" min":""}</div>
+    </div>
+  </div>`;
+
+  // Ressenti
+  html += `<div style="display:flex;gap:6px;margin-bottom:14px">
+    ${RESSENTI.map((r,i)=>`<div style="flex:1;text-align:center;padding:6px 2px;border-radius:8px;font-size:10px;border:1px solid ${s.ressenti===i?color:"#2A3040"};background:${s.ressenti===i?color+"22":"transparent"};color:${s.ressenti===i?color:"#6B7385"}">${r}</div>`).join("")}
+  </div>`;
+
+  // Match details
+  if(s.type==="match"){
+    html+=`<div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:14px">
+      ${s.adversaire?`<span style="background:#FF465522;color:#FF4655;padding:4px 12px;border-radius:99px;font-size:13px;font-weight:600">vs ${s.adversaire}</span>`:""}
+      ${s.score?`<span style="background:${s.resultat==="V"?"#C8FF0022":"#FF465522"};color:${s.resultat==="V"?"#C8FF00":"#FF4655"};padding:4px 12px;border-radius:99px;font-size:13px;font-weight:700">${s.score}</span>`:""}
+      ${s.poste?`<span style="background:#4A90E222;color:#4A90E2;padding:4px 12px;border-radius:99px;font-size:13px">${s.poste}</span>`:""}
+    </div>`;
+  }
+
+  // Kine details
+  if(s.type==="kine"){
+    html+=`<div style="background:#E91E8C18;border:1px solid #E91E8C44;border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="font-size:13px;color:#E91E8C;font-weight:600">🩺 ${s.kineZone||"Poignet droit"}</div>
+      ${s.kinePraticien?`<div style="font-size:12px;color:#6B7385;margin-top:4px">avec ${s.kinePraticien}</div>`:""}
+    </div>`;
+  }
+
+  // Terrain
+  if(s.type==="terrain" && s.focus){
+    html+=`<div style="background:#C8FF0018;border:1px solid #C8FF0044;border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="font-size:13px;color:#C8FF00">🎯 Focus : ${s.focus}</div>
+    </div>`;
+  }
+
+  // Exercices list
+  if(exArr.length){
+    html+=`<div style="margin-bottom:14px">
+      <div style="font-size:12px;color:#6B7385;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">Programme (${exArr.length} exercices)</div>`;
+    exArr.forEach((ex,i)=>{
+      html+=`<div style="display:flex;gap:8px;align-items:flex-start;margin-bottom:6px;padding:8px 10px;background:#161A23;border-radius:8px">
+        <span style="color:${color};font-weight:700;font-size:12px;min-width:18px">${i+1}.</span>
+        <span style="font-size:12px;color:#E8ECF0;line-height:1.5">${ex.trim()}</span>
+      </div>`;
+    });
+    html+=`</div>`;
+  }
+
+  // Charges logged
+  const sessionCharges = chargesLog.filter(c=>c.sessionId==id);
+  if(sessionCharges.length){
+    html+=`<div style="background:#4A90E218;border:1px solid #4A90E244;border-radius:10px;padding:12px;margin-bottom:14px">
+      <div style="font-size:12px;color:#4A90E2;font-weight:700;letter-spacing:1px;margin-bottom:8px">CHARGES ENREGISTRÉES ✅</div>`;
+    sessionCharges.forEach(c=>{
+      const maxKg = Math.max(...c.sets.map(s=>s.kg||0));
+      html+=`<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+        <span style="font-size:12px;color:#E8ECF0">${c.exName||"Exercice"}</span>
+        <span style="font-size:12px;color:#4A90E2;font-weight:700">${maxKg}kg max · ${c.sets.length} séries</span>
+      </div>`;
+    });
+    html+=`</div>`;
+  }
+
+  // Comment field
+  html+=`<div style="margin-bottom:14px">
+    <div style="font-size:12px;color:#6B7385;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:6px">Commentaire</div>
+    <textarea id="detail_comment" style="width:100%;background:#161A23;border:1px solid #2A3040;border-radius:8px;color:#E8ECF0;padding:10px;font-size:13px;min-height:70px;resize:vertical;font-family:inherit" placeholder="Ajoute une note, ressenti, observation...">${s.notes||""}</textarea>
+  </div>`;
+
+  // Action buttons
+  html+=`<div style="display:flex;flex-direction:column;gap:8px">`;
+
+  if(exArr.length){
+    html+=`<button onclick="closeModal();openChargesLog('${id}')" style="width:100%;background:#4A90E2;color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;letter-spacing:1px">
+      🏋️ ${hasCharges?"MODIFIER MES CHARGES":"SAISIR MES CHARGES"}
+    </button>`;
+  }
+
+  html+=`<button onclick="saveDetailComment('${id}','${kind}')" style="width:100%;background:#C8FF00;color:#000;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:14px;letter-spacing:1px">
+    💾 ENREGISTRER LE COMMENTAIRE
+  </button>
+  <div style="display:flex;gap:8px">
+    ${kind!=="auto"?`<button onclick="closeModal();editSession('${id}')" style="flex:1;background:#161A23;border:1px solid #2A3040;border-radius:10px;padding:11px;color:#E8ECF0;font-weight:600;font-size:13px">✏️ Modifier</button>`:""}
+    <button onclick="closeModal();deleteAnySession('${id}','${kind}')" style="flex:1;background:#FF465518;border:1px solid #FF465544;border-radius:10px;padding:11px;color:#FF4655;font-weight:600;font-size:13px">🗑️ Supprimer</button>
+    <button onclick="closeModal()" style="flex:1;background:#161A23;border:1px solid #2A3040;border-radius:10px;padding:11px;color:#6B7385;font-weight:600;font-size:13px">Fermer</button>
+  </div>
+  </div>`;
+
+  openModal(html);
+}
+
+function saveDetailComment(id, kind){
+  const comment = document.getElementById("detail_comment")?.value || "";
+  if(kind==="auto"){
+    autoSessions = autoSessions.map(s=>s.id==id?{...s,notes:comment}:s);
+    save("rp_auto", autoSessions);
+  } else {
+    sessions = sessions.map(s=>s.id==id?{...s,notes:comment}:s);
+    save("rp_sessions", sessions);
+  }
+  closeModal();
+  render();
+}
+
 function toggleExpand(id){
   if(expandedCards.has(id)) expandedCards.delete(id); else expandedCards.add(id);
   render();
+}
+
+// ── SESSION CHARGES LOGGING ───────────────────────────────────────────────────
+let loggingSession = null; // session id being logged
+
+function openChargesLog(sessionId){
+  const s = sessions.find(x=>x.id==sessionId) || autoSessions.find(x=>x.id==sessionId);
+  if(!s) return;
+  loggingSession = sessionId;
+
+  const exArr = Array.isArray(s.exercices) ? s.exercices : (s.exercices ? s.exercices.split("|") : []);
+  const prog = s.muscuProgKey ? (MUSCU_PROGRAMS[s.muscuProgKey] || MUSCU_PROGRAMS_ETE[s.muscuProgKey]) : null;
+  const color = prog ? prog.color : "#4A90E2";
+
+  // Build existing charges for this session if any
+  const existing = chargesLog.filter(c=>c.sessionId==sessionId);
+
+  let html = `<div class="modal-title" style="color:${color}">🏋️ Saisir mes charges</div>
+  <div style="font-size:12px;color:#6B7385;margin-bottom:16px">${s.date} · ${prog?prog.label:"Muscu"}</div>`;
+
+  exArr.forEach((ex, ei) => {
+    const exName = ex.trim().split("—")[0].trim().split("(")[0].trim();
+    const exKey = "sess_"+sessionId+"_ex"+ei;
+    const existingEx = chargesLog.find(c=>c.exKey===exKey);
+
+    html += `<div style="background:#161A23;border:1px solid #2A3040;border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:700;color:${color};margin-bottom:10px">${ei+1}. ${exName}</div>
+      <div style="font-size:11px;color:#6B7385;margin-bottom:10px">${ex.trim()}</div>
+      <div id="sets_${exKey}">`;
+
+    // Pre-fill with existing or 4 empty sets
+    const sets = existingEx ? existingEx.sets : [{kg:"",reps:""},{kg:"",reps:""},{kg:"",reps:""},{kg:"",reps:""}];
+    sets.forEach((set,si) => {
+      html += `<div style="display:flex;gap:8px;align-items:center;margin-bottom:6px">
+        <div style="width:22px;height:22px;border-radius:50%;background:${color}22;color:${color};font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0">${si+1}</div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center">
+          <input type="number" id="${exKey}_kg${si}" value="${set.kg||""}" placeholder="kg" style="background:#0D0F14;border:1px solid #2A3040;border-radius:8px;color:#E8ECF0;padding:8px;font-size:14px;text-align:center;width:100%"/>
+          <div style="font-size:10px;color:#6B7385;margin-top:2px">kg</div>
+        </div>
+        <div style="color:#6B7385;font-size:14px">×</div>
+        <div style="flex:1;display:flex;flex-direction:column;align-items:center">
+          <input type="number" id="${exKey}_reps${si}" value="${set.reps||""}" placeholder="reps" style="background:#0D0F14;border:1px solid #2A3040;border-radius:8px;color:#E8ECF0;padding:8px;font-size:14px;text-align:center;width:100%"/>
+          <div style="font-size:10px;color:#6B7385;margin-top:2px">reps</div>
+        </div>
+      </div>`;
+    });
+
+    html += `</div>
+    </div>`;
+  });
+
+  html += `<button onclick="saveSessionCharges('${sessionId}')" style="width:100%;background:${color};color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:15px;letter-spacing:1px;margin-top:6px">
+    💾 ENREGISTRER MES CHARGES
+  </button>
+  <button onclick="closeModal()" style="width:100%;background:#161A23;border:1px solid #2A3040;border-radius:10px;padding:12px;color:#6B7385;font-weight:600;margin-top:8px">Annuler</button>`;
+
+  openModal(html);
+}
+
+function saveSessionCharges(sessionId){
+  const s = sessions.find(x=>x.id==sessionId) || autoSessions.find(x=>x.id==sessionId);
+  if(!s) return;
+
+  const exArr = Array.isArray(s.exercices) ? s.exercices : (s.exercices ? s.exercices.split("|") : []);
+  let savedCount = 0;
+
+  exArr.forEach((ex, ei) => {
+    const exKey = "sess_"+sessionId+"_ex"+ei;
+    const exName = ex.trim().split("—")[0].trim().split("(")[0].trim();
+
+    // Find matching EXERCISES entry for proper tracking
+    const exEntry = EXERCISES.find(e => exName.toLowerCase().includes(e.label.toLowerCase().split(" ")[0].toLowerCase()));
+
+    const sets = [];
+    for(let si=0; si<4; si++){
+      const kgEl = document.getElementById(exKey+"_kg"+si);
+      const repsEl = document.getElementById(exKey+"_reps"+si);
+      if(kgEl && repsEl){
+        const kg = parseFloat(kgEl.value);
+        const reps = parseInt(repsEl.value);
+        if(kg && reps) sets.push({kg, reps});
+      }
+    }
+
+    if(sets.length > 0){
+      // Remove existing entry for this exKey
+      chargesLog = chargesLog.filter(c=>c.exKey!==exKey);
+      chargesLog.push({
+        id: Date.now() + ei,
+        exId: exEntry ? exEntry.id : "custom_"+ei,
+        exKey: exKey,
+        exName: exName,
+        sessionId: sessionId,
+        date: s.date,
+        notes: s.notes || "",
+        sets,
+      });
+      savedCount++;
+    }
+  });
+
+  save("rp_charges", chargesLog);
+  closeModal();
+
+  // Show confirmation
+  const btn = document.querySelector(`[onclick="openChargesLog('${sessionId}')"]`);
+  render();
+  alert(savedCount + " exercices enregistrés dans le suivi des charges !");
+}
+
+
+
+// ── PROGRAMME ─────────────────────────────────────────────────────────────────
+function renderProgramme(){
+  const period = SEASON_PERIODS[seasonPeriod];
+  const phase = getPhase(today());
+
+  // Override days if injured (phase1 or phase2)
+  const injuryDays = {
+    lundi:{key:phase==="phase1"?"phase1_force":"phase2_kinemix",label:"Force bas du corps",icon:"⚡"},
+    mercredi:{key:phase==="phase1"?"phase1_cardio":"phase2_cardio",label:"Cardio & explosivité",icon:"💨"},
+    vendredi:{key:"phase1_mobilite",label:"Mobilité & gainage",icon:"🧘"},
+  };
+  const days = phase === "phase3" ? period.days : injuryDays;
+
+  let html = `
+  <div class="sec-title">Période de saison</div>
+  <div class="period-grid">`;
+
+  Object.entries(SEASON_PERIODS).forEach(([k,p])=>{
+    const isActive = seasonPeriod===k;
+    html+=`<button class="period-btn ${isActive?"active":""}" onclick="setSeason('${k}')"
+      style="border-color:${isActive?p.color:"#2A3040"};background:${isActive?p.color+"18":"#161A23"}">
+      <div class="period-icon">${p.icon}</div>
+      <div class="period-label" style="color:${isActive?p.color:"#6B7385"}">${p.label}</div>
+    </button>`;
+  });
+
+  html+=`</div>
+  <div class="card" style="border-color:${period.color}44;background:${period.color}08;margin-bottom:14px">
+    <div style="font-size:14px;font-weight:700;color:${period.color}">${period.icon} ${period.label}</div>
+    <div style="font-size:12px;color:#6B7385;margin-top:6px;line-height:1.6">${period.desc}</div>
+    ${phase!=="phase3"?`<div style="font-size:12px;color:#FF4655;margin-top:8px;font-weight:600">⚠️ Adapté blessure : ${INJURY_PHASES[phase].sublabel}</div>`:""}
+  </div>
+
+  <div class="sec-title">Semaine type — Lun / Mer / Ven</div>
+  <div class="week-card">`;
+
+  Object.entries(days).forEach(([day,info])=>{
+    const prog = {...MUSCU_PROGRAMS,...MUSCU_PROGRAMS_ETE}[info.key];
+    if(!prog) return;
+    html+=`<div class="week-day">
+      <div class="week-day-label">${day.charAt(0).toUpperCase()+day.slice(1)}</div>
+      <div style="font-size:18px">${info.icon}</div>
+      <div class="week-day-info">
+        <div class="week-day-title">${prog.label}</div>
+        <div class="week-day-desc">${prog.duree}min · ${prog.exercices.length} exercices</div>
+      </div>
+      <button class="week-day-btn" onclick="generateWeekSession('${info.key}','${day}')" style="color:${prog.color};border-color:${prog.color}44">+ Créer</button>
+    </div>`;
+  });
+
+  html+=`</div>
+
+  <button onclick="generateFullWeek()" style="width:100%;background:#C8FF00;color:#000;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:15px;letter-spacing:1px;margin-bottom:14px">
+    ⚡ GÉNÉRER LA SEMAINE COMPLÈTE
+  </button>
+
+  <div class="sec-title">Prochaines séances muscu</div>`;
+
+  const muscuSess = sessions.filter(s=>s.type==="muscu").sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  if(!muscuSess.length){
+    html+=`<div class="card" style="text-align:center;padding:30px;color:#6B7385">Aucune séance muscu enregistrée.<br>Génère ta semaine !</div>`;
+  } else {
+    muscuSess.forEach(s=>{ html+=renderSessionCard(s); });
+  }
+
+  return html;
+}
+
+function setSeason(key){
+  seasonPeriod=key;
+  save("rp_season",seasonPeriod);
+  render();
+}
+
+function getNextWeekday(dayName){
+  const days={lundi:1,mercredi:3,vendredi:5};
+  const target=days[dayName]||1;
+  const now=new Date();
+  const current=now.getDay()===0?7:now.getDay();
+  let diff=target-current;
+  if(diff<=0) diff+=7;
+  return addDays(today(),diff);
+}
+
+function generateWeekSession(progKey,dayName){
+  const prog = MUSCU_PROGRAMS[progKey] || MUSCU_PROGRAMS_ETE[progKey];
+  if(!prog){ alert("Programme introuvable !"); return; }
+  const date=getNextWeekday(dayName);
+  const s={
+    id:Date.now(), type:"muscu", date, heure:"", duree:prog.duree,
+    ressenti:2, notes:"Généré — "+prog.label,
+    exercices:prog.exercices, muscuProgKey:progKey, auto:false,
+  };
+  sessions=[...sessions,s];
+  save("rp_sessions",sessions);
+  render();
+  alert("Séance "+prog.label+" créée pour le "+fmt(date)+" !");
+}
+
+function generateFullWeek(){
+  const phase=getPhase(today());
+  const period=SEASON_PERIODS[seasonPeriod];
+  const injDays={
+    lundi:{key:phase==="phase1"?"phase1_force":"phase2_kinemix"},
+    mercredi:{key:phase==="phase1"?"phase1_cardio":"phase2_cardio"},
+    vendredi:{key:"phase1_mobilite"},
+  };
+  const days=phase==="phase3"?period.days:injDays;
+  let count=0;
+  Object.entries(days).forEach(([day,info])=>{
+    const prog={...MUSCU_PROGRAMS,...MUSCU_PROGRAMS_ETE}[info.key];
+    if(!prog) return;
+    const date=getNextWeekday(day);
+    // Don't duplicate
+    const exists=sessions.find(s=>s.date===date&&s.type==="muscu");
+    if(!exists){
+      sessions=[...sessions,{id:Date.now()+Math.random(),type:"muscu",date,heure:"",duree:prog.duree,ressenti:2,notes:"Généré — "+prog.label,exercices:prog.exercices,muscuProgKey:info.key,auto:false}];
+      count++;
+    }
+  });
+  save("rp_sessions",sessions);
+  render();
+  if(count>0) alert(count+" séances créées pour la semaine prochaine !");
+  else alert("Les séances existent déjà pour cette semaine !");
+}
+
+
+// ── COACH VIEW ────────────────────────────────────────────────────────────────
+let coachHistory = [];
+let coachInitialized = false;
+
+function renderCoach(){
+  const phase = getPhase(today());
+  const ph = INJURY_PHASES[phase];
+  const period = SEASON_PERIODS[seasonPeriod];
+  const recentSessions = sessions.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,5);
+  const nextMatch = matches.filter(m=>m.date>=today()).sort((a,b)=>a.date.localeCompare(b.date))[0];
+
+  // Quick action suggestions
+  const quickActions = [
+    "Génère ma semaine muscu 💪",
+    "Comment améliorer ma vitesse ? ⚡",
+    "Conseil récup poignet 🩹",
+    "Analyse ma semaine 📊",
+    "Séance cardio demain 🏃",
+    "Conseil nutrition rugby 🥗",
+  ];
+
+  let html = `
+  <div style="background:#1E2330;border:1px solid #2A3040;border-radius:12px;padding:12px 14px;margin-bottom:12px">
+    <div style="display:flex;gap:10px;align-items:center">
+      <span style="font-size:24px">🤖</span>
+      <div>
+        <div style="font-weight:700;font-size:14px">Coach Rugby Perf</div>
+        <div style="font-size:11px;color:#6B7385;margin-top:2px">${ph.icon} ${ph.label.split("—")[0].trim()} · ${period.icon} ${period.label}</div>
+      </div>
+      <button onclick="clearCoach()" style="margin-left:auto;background:none;border:1px solid #2A3040;border-radius:8px;padding:4px 10px;color:#6B7385;font-size:11px">Effacer</button>
+    </div>
+  </div>
+  <div class="quick-btns">
+    ${quickActions.map((q,i)=>`<button class="quick-btn" onclick="sendCoachQuick(${i})">${q}</button>`).join("")}
+  </div>
+  <div class="coach-messages" id="coach-msgs">`;
+
+  if(!coachHistory.length){
+    html += `<div class="coach-msg assistant">Salut Louis ! 👋 Je suis ton coach personnel Rugby Perf.<br><br>
+Je connais ta situation : <strong style="color:#FF4655">${ph.label}</strong>, tu es en <strong style="color:${period.color}">${period.label}</strong>, demi de mêlée chez les ${recentSessions.length > 0 ? recentSessions.length+" séances ce mois" : "débutant sur l'app"}.<br><br>
+Je peux t'aider sur ta prépa physique, ta récup, ton planning, tes charges, ta nutrition, ta tactique... Pose-moi n'importe quelle question ! 💪</div>`;
+  } else {
+    coachHistory.forEach(m=>{
+      const msgHtml = m.content.split("\n").join("<br>");
+      html+=`<div class="coach-msg ${m.role==="user"?"user":"assistant"}">${msgHtml}</div>`;
+    });
+  }
+
+  html+=`</div>
+  <div class="coach-input-wrap">
+    <textarea class="coach-textarea" id="coach-input" placeholder="Pose ta question à ton coach..." rows="1"
+      onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendCoach()}"></textarea>
+    <button class="coach-send" id="coach-send" onclick="sendCoach()">↑</button>
+  </div>`;
+
+  return html;
+}
+
+function clearCoach(){
+  coachHistory=[];
+  render();
+}
+
+function sendCoachQuick(idx){
+  const quickActions=["Génère ma semaine muscu 💪","Comment améliorer ma vitesse ? ⚡","Conseil récup poignet 🩹","Analyse ma semaine 📊","Séance cardio demain 🏃","Conseil nutrition rugby 🥗"];
+  const text = quickActions[idx] || "";
+  const input = document.getElementById("coach-input");
+  if(input){ input.value=text; sendCoach(); }
+}
+
+async function sendCoach(){
+  const input = document.getElementById("coach-input");
+  const btn = document.getElementById("coach-send");
+  if(!input) return;
+  const text = input.value.trim();
+  if(!text) return;
+
+  input.value="";
+  btn.disabled=true;
+
+  coachHistory.push({role:"user",content:text});
+
+  // Add user msg to DOM
+  const msgs = document.getElementById("coach-msgs");
+  if(msgs){
+    const ud=document.createElement("div");
+    ud.className="coach-msg user";
+    ud.textContent=text;
+    msgs.appendChild(ud);
+    const ld=document.createElement("div");
+    ld.className="coach-msg assistant loading";
+    ld.id="coach-loading";
+    ld.textContent="Coach en train de répondre...";
+    msgs.appendChild(ld);
+    msgs.scrollTop=msgs.scrollHeight;
+  }
+
+  // Build context
+  const phase=getPhase(today());
+  const ph=INJURY_PHASES[phase];
+  const period=SEASON_PERIODS[seasonPeriod];
+  const recentSess=sessions.slice().sort((a,b)=>b.date.localeCompare(a.date)).slice(0,10);
+  const nextMatch=matches.filter(m=>m.date>=today()).sort((a,b)=>a.date.localeCompare(b.date))[0];
+  const kineSess=sessions.filter(s=>s.type==="kine").length;
+  const muscuSess=sessions.filter(s=>s.type==="muscu").length;
+  const matchSess=sessions.filter(s=>s.type==="match");
+  const wins=matchSess.filter(m=>m.resultat==="V").length;
+
+  // Build sessions summary for coach context
+  const thisWeekSess = [...sessions,...autoSessions].filter(s=>weekKey(s.date)===weekKey(todayStr));
+  const nextWeekSess = [...sessions,...autoSessions].filter(s=>{
+    const sw = weekKey(addDays(todayStr,7));
+    return weekKey(s.date)===sw;
+  });
+
+  const sysPrompt = `Tu es le coach personnel de Louis, demi de mêlée de 28 ans.
+CONTEXTE ACTUEL :
+- Blessure : fracture poignet droit — ${ph.label} (${ph.sublabel})
+- Période : ${period.label} — ${period.desc}
+- Date : ${today()}
+- Séances ce mois : ${sessions.filter(s=>s.date.startsWith(today().slice(0,7))).length} total (${muscuSess} muscu, ${kineSess} kiné)
+- Bilan matchs : ${wins}V / ${matchSess.length-wins}D sur ${matchSess.length} matchs
+- Prochain match : ${nextMatch ? "vs "+nextMatch.adversaire+" le "+nextMatch.date : "Aucun planifié"}
+- 5 dernières séances : ${recentSess.slice(0,5).map(s=>s.date+" "+s.type+(s.muscuProgKey?" ("+s.muscuProgKey+")":"")+" ressenti:"+RESSENTI[s.ressenti]).join(" | ")}
+- Cette semaine : ${thisWeekSess.length} séances (${thisWeekSess.map(s=>s.date.slice(5)+" "+s.type).join(", ")||"aucune"})
+- Semaine prochaine : ${nextWeekSess.length} séances planifiées
+
+TON RÔLE :
+Tu es un coach complet — préparateur physique, gestionnaire de planning, conseiller en récupération, nutrition, tactique rugby.
+Tu connais parfaitement le profil du demi de mêlée : vitesse, explosivité, endurance, agilité, jeu au pied, passes.
+Tu adaptes TOUJOURS tes conseils à la blessure actuelle (poignet droit — éviter appuis/charges côté droit en phase 1-2).
+
+CAPACITÉS :
+- Analyser sa progression et ses séances
+- Conseiller sur la récupération, nutrition, sommeil
+- Créer des programmes muscu adaptés
+- Donner des conseils tactiques rugby DM
+- Planifier des semaines d'entraînement
+- Répondre à des questions médicales/kiné (en recommandant toujours l'avis d'un professionnel)
+- Motiver et soutenir mentalement
+
+STYLE :
+- Chaleureux, direct, comme un vrai coach
+- Utilise des emojis
+- Réponses concises mais complètes (pas plus de 150 mots sauf si demande détaillée)
+- Appelle-le "Louis" ou "mec" parfois
+- Toujours en français
+
+Si Louis demande de créer/générer/ajouter une séance ou un match, dis-lui de passer par le bouton 🤖 flottant ou l'onglet Programme.`;
+
+  try {
+    const apiMessages = coachHistory.map(m=>({role:m.role,content:m.content}));
+
+    const response = await fetch("https://api.anthropic.com/v1/messages",{
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "x-api-key":"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",
+        "anthropic-version":"2023-06-01",
+        "anthropic-dangerous-direct-browser-access":"true"
+      },
+      body:JSON.stringify({
+        model:"claude-sonnet-4-6",
+        max_tokens:600,
+        system:sysPrompt,
+        messages:apiMessages
+      })
+    });
+
+    const data=await response.json();
+    const reply=data.content?.[0]?.text||"Désolé, je n'ai pas pu répondre. Réessaie !";
+
+    coachHistory.push({role:"assistant",content:reply});
+
+    const loading=document.getElementById("coach-loading");
+    if(loading){
+      loading.classList.remove("loading");
+      loading.id="";
+      loading.innerHTML=reply.split("\n").join("<br>");
+    }
+
+    const m2=document.getElementById("coach-msgs");
+    if(m2) m2.scrollTop=m2.scrollHeight;
+
+  } catch(err){
+    const loading=document.getElementById("coach-loading");
+    if(loading){ loading.classList.remove("loading"); loading.textContent="Erreur de connexion. Vérifie ta connexion internet !"; }
+  }
+
+  btn.disabled=false;
+  const inp=document.getElementById("coach-input");
+  if(inp) inp.focus();
+}
+
+// ── AGENDA UNIFIÉ ─────────────────────────────────────────────────────────────
+function renderAgenda(){
+  const allEvents=[...sessions.map(s=>({...s,_kind:"session"})),...autoSessions.map(s=>({...s,_kind:"auto"})),...matches.map(m=>({...m,type:"match_planned",_kind:"planned"}))].sort((a,b)=>a.date.localeCompare(b.date));
+  const upcoming=allEvents.filter(e=>e.date>=today());
+  const past=allEvents.filter(e=>e.date<today()).reverse().slice(0,10);
+  let html=`<div class="sec-title">A venir (${upcoming.length})</div>`;
+  if(!upcoming.length) html+=`<div class="card" style="text-align:center;padding:30px"><div style="font-size:40px">📅</div><div style="color:#6B7385;margin-top:10px">Aucun evenement.<br>Ajoute des seances ou des matchs !</div></div>`;
+  const byDate={};
+  upcoming.forEach(e=>{if(!byDate[e.date])byDate[e.date]=[];byDate[e.date].push(e);});
+  Object.entries(byDate).slice(0,30).forEach(([date,events])=>{
+    const isToday=date===today(),isTomorrow=date===addDays(today(),1);
+    const dayLabel=isToday?"Aujourd\'hui":isTomorrow?"Demain":fmtFull(date);
+    const days=diffDays(today(),date);
+    html+=`<div style="margin-bottom:14px"><div style="display:flex;align-items:center;gap:10px;margin-bottom:8px"><div style="font-size:13px;font-weight:700;color:${isToday?C.accent:"#E8ECF0"}">${dayLabel}</div>${days>0?`<div style="font-size:11px;color:#6B7385">dans ${days}j</div>`:""}<div style="flex:1;height:1px;background:#2A3040"></div></div>`;
+    events.forEach(e=>{
+      if(e._kind==="planned"){
+        const ll={D:"🏠",E:"✈️",N:"⚖️"};
+        html+=`<div style="background:#FF465518;border:1px solid #FF465544;border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:20px">⚔️</span><div style="flex:1"><div style="font-weight:700;color:#FF4655">vs ${e.adversaire}</div><div style="font-size:12px;color:#6B7385">${e.heure||"15:00"} · ${ll[e.lieu]||""} · ${e.competition}</div></div>${tag(days<=3?C.red:days<=7?C.orange:C.teal,"J-"+days)}</div>`;
+      } else {
+        const t=SESSION_TYPES[e.type]||SESSION_TYPES.muscu,prog=e.muscuProgKey?MUSCU_PROGRAMS[e.muscuProgKey]:null;
+        const color=prog?prog.color:t.color,icon=prog?prog.icon:t.icon,label=prog?prog.label:t.label;
+        html+=`<div style="background:#1E2330;border:1px solid #2A3040;border-radius:12px;padding:12px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px"><span style="font-size:18px">${icon}</span><div style="flex:1"><div style="font-weight:600;font-size:13px">${label}${e.auto?" ·auto":""}</div><div style="font-size:12px;color:#6B7385">${e.heure?e.heure+" · ":""}${e.duree?e.duree+"min":""}${e.type==="kine"&&e.kinePraticien?" · "+e.kinePraticien:""}${e.type==="terrain"&&e.focus?" · "+e.focus:""}</div></div><div style="width:8px;height:8px;border-radius:50%;background:${color}"></div></div>`;
+      }
+    });
+    html+=`</div>`;
+  });
+  if(past.length){
+    html+=`<div class="sec-title">Recent</div>`;
+    past.filter(e=>e._kind!=="planned").forEach(e=>{
+      const t=SESSION_TYPES[e.type]||SESSION_TYPES.muscu,prog=e.muscuProgKey?MUSCU_PROGRAMS[e.muscuProgKey]:null;
+      const color=prog?prog.color:t.color,icon=prog?prog.icon:t.icon,label=prog?prog.label:t.label;
+      html+=`<div onclick="openSessionDetail('${e.id}','${e._kind}')" style="background:#1E2330;border:1px solid #2A3040;border-radius:12px;padding:10px 14px;margin-bottom:8px;display:flex;align-items:center;gap:10px;opacity:.75;cursor:pointer"><span style="font-size:16px">${icon}</span><div style="flex:1"><div style="font-size:13px;font-weight:600">${label}</div><div style="font-size:11px;color:#6B7385">${fmt(e.date)}${e.heure?" · "+e.heure:""}${e.duree?" · "+e.duree+"min":""}</div></div><div style="font-size:11px;color:#6B7385">›</div></div>`;
+    });
+  }
+  return html;
 }
 
 // ── PLANNING ──────────────────────────────────────────────────────────────────
@@ -573,14 +1265,19 @@ function renderCharges(){
     if(logs.length){
       html += `<div class="sec-title" style="margin-top:18px">Historique</div>`;
       [...logs].reverse().forEach(l => {
+        const maxKg = Math.max(...l.sets.map(s=>s.kg||0));
+        const totalVol = l.sets.reduce((a,s)=>(s.kg&&s.reps?a+(s.kg*s.reps):a),0);
         html += `<div style="background:#161A23;border:1px solid #2A3040;border-radius:10px;padding:12px 14px;margin-bottom:8px">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
             <div style="font-size:13px;font-weight:600">${fmt(l.date)}</div>
-            <div style="font-size:11px;color:#6B7385">${l.notes||""}</div>
-            <button onclick="deleteCharge('${l.id}')" style="color:#FF4655;font-size:13px;background:none;border:none">🗑️</button>
+            <div style="display:flex;gap:8px;align-items:center">
+              <span style="font-size:12px;color:#4A90E2;font-weight:700">${maxKg}kg max</span>
+              <span style="font-size:11px;color:#6B7385">vol:${totalVol}kg</span>
+              <button onclick="deleteCharge('${l.id}')" style="color:#FF4655;font-size:13px;background:none;border:none">🗑️</button>
+            </div>
           </div>
           <div style="display:flex;gap:6px;flex-wrap:wrap">
-            ${l.sets.map((s,i)=>`<div style="background:#1E2330;border:1px solid #2A3040;border-radius:8px;padding:5px 10px;font-size:12px;color:#E8ECF0">Série ${i+1} · <strong style="color:#4A90E2">${s.kg}kg</strong> × ${s.reps}</div>`).join("")}
+            ${l.sets.map((s,i)=>`<div style="background:#1E2330;border:1px solid #2A3040;border-radius:8px;padding:5px 10px;font-size:12px;color:#E8ECF0">S${i+1} · <strong style="color:#4A90E2">${s.kg}kg</strong> × ${s.reps}</div>`).join("")}
           </div>
         </div>`;
       });
@@ -870,7 +1567,11 @@ function openSessionForm(initial=null){
   <div class="type-grid">${typeButtons}</div>
   <div class="grid2">
     <div class="field"><label>Date</label><input class="input" type="date" id="f_date" value="${s.date||today()}"/></div>
+    <div class="field"><label>Heure</label><input class="input" type="time" id="f_heure" value="${s.heure||""}"/></div>
+  </div>
+  <div class="grid2" style="margin-bottom:12px">
     <div class="field"><label>Durée (min)</label><input class="input" type="number" id="f_duree" placeholder="60" value="${s.duree||""}"/></div>
+    <div class="field"><label></label><div style="height:38px"></div></div>
   </div>
   <div id="type_fields">${renderTypeFields(type,s)}</div>
   <div class="field"><label>Ressenti</label><div class="ressenti-row">${resButtons}</div></div>
@@ -955,6 +1656,19 @@ function editSession(id){
 
 function deleteSession(id){
   if(confirm("Supprimer cette séance ?")){ sessions=sessions.filter(s=>s.id!=id); save("rp_sessions",sessions); render(); }
+}
+
+function deleteAnySession(id, kind){
+  if(confirm("Supprimer cette séance ?")){
+    if(kind==="auto"){
+      autoSessions=autoSessions.filter(s=>s.id!=id);
+      save("rp_auto",autoSessions);
+    } else {
+      sessions=sessions.filter(s=>s.id!=id);
+      save("rp_sessions",sessions);
+    }
+    render();
+  }
 }
 
 // ── MATCH FORM ────────────────────────────────────────────────────────────────
@@ -1047,17 +1761,18 @@ async function sendAI(){
   const loadingDiv = addAIMsg("assistant loading", "...");
 
   const todayStr = today();
-  const systemPrompt = `Tu es l'assistant de l'app Rugby Perf de Louis, demi de mêlée de 28 ans avec une fracture au poignet droit.
+  const systemPrompt = `Tu es l'assistant personnel de Louis dans son app Rugby Perf. Louis est demi de mêlée, 28 ans, fracture au poignet droit en cours de guérison. Tu es son coach — enthousiaste, motivant, tu parles comme un vrai coach de rugby en français.
 Ta mission : analyser ce que dit Louis et retourner UNIQUEMENT un JSON valide (sans markdown, sans texte autour) avec cette structure :
 {
   "action": "add_session" | "add_match" | "none",
-  "message": "Message de confirmation en français",
+  "message": "Message chaleureux et motivant 2-3 phrases avec emojis, spécifique à ce que Louis vient de dire. Appelle-le par son prénom parfois.",
   "data": { ... }
 }
 
 Pour add_session, data contient :
 - type: "terrain" | "muscu" | "match" | "recup" | "kine"
 - date: "YYYY-MM-DD" (aujourd'hui = ${todayStr})
+- heure: "HH:MM" (optionnel, si mentionné)
 - duree: nombre en minutes (optionnel)
 - ressenti: 0-4 (optionnel, défaut 2)
 - notes: string (optionnel)
@@ -1073,9 +1788,9 @@ Pour add_match (planning futur), data contient :
 - lieu: "D" | "E" | "N" (défaut "D")
 - competition: string (défaut "Championnat")
 
-Si tu ne comprends pas ou si c'est une question, retourne action "none" avec un message d'aide.
-Interprète les dates en français : "lundi prochain", "29 juin", "demain", etc. par rapport à aujourd'hui ${todayStr}.
-Mois en cours : juin 2025.`;
+Si tu ne comprends pas, retourne action "none" avec un message d'aide motivant.
+Interprète les dates en français par rapport à aujourd'hui ${todayStr} (juin 2025).
+Utilise toujours des emojis dans tes messages. Sois chaleureux et encourage Louis dans sa rééducation et sa progression.`;
 
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
@@ -1110,6 +1825,7 @@ Mois en cours : juin 2025.`;
         id: Date.now(),
         type: result.data.type || "terrain",
         date: result.data.date || todayStr,
+        heure: result.data.heure || "",
         duree: result.data.duree || 0,
         ressenti: result.data.ressenti ?? 2,
         notes: result.data.notes || "",
@@ -1117,6 +1833,53 @@ Mois en cours : juin 2025.`;
       };
       sessions = [...sessions, s];
       save("rp_sessions", sessions);
+      render();
+    }
+
+    if(result.action === "generate_muscu" && result.data){
+      const pk = result.data.muscuProgKey;
+      const prog = MUSCU_PROGRAMS[pk];
+      if(prog){
+        const s = {
+          id: Date.now(),
+          type: "muscu",
+          date: result.data.date || todayStr,
+          heure: result.data.heure || "",
+          duree: prog.duree,
+          ressenti: 2,
+          notes: "Généré par l'assistant",
+          exercices: prog.exercices,
+          muscuProgKey: pk,
+          auto: false,
+        };
+        sessions = [...sessions, s];
+        save("rp_sessions", sessions);
+        render();
+      }
+    }
+
+    if(result.action === "delete_session" && result.data){
+      const d = result.data;
+      const before = sessions.length + autoSessions.length;
+      sessions = sessions.filter(s=>!(s.date===d.date && s.type===d.type));
+      autoSessions = autoSessions.filter(s=>!(s.date===d.date && s.type===d.type));
+      save("rp_sessions", sessions);
+      save("rp_auto", autoSessions);
+      render();
+    }
+
+    if(result.action === "move_session" && result.data){
+      const d = result.data;
+      sessions = sessions.map(s=>{
+        if(s.date===d.fromDate && s.type===d.type) return {...s, date:d.toDate};
+        return s;
+      });
+      autoSessions = autoSessions.map(s=>{
+        if(s.date===d.fromDate && s.type===d.type) return {...s, date:d.toDate};
+        return s;
+      });
+      save("rp_sessions", sessions);
+      save("rp_auto", autoSessions);
       render();
     }
 
