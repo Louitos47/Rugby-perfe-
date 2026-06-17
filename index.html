@@ -110,6 +110,22 @@ input,textarea,select{outline:none;font-family:inherit}
 /* ICS EXPORT BTN */
 .ics-btn{width:100%;background:#161A23;border:1px solid rgba(200,255,0,.3);border-radius:10px;padding:12px;color:#C8FF00;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px}
 
+/* CHARGES */
+.ex-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:14px}
+.ex-btn{background:#161A23;border:1px solid #2A3040;border-radius:10px;padding:12px 10px;text-align:left;transition:all .15s;cursor:pointer}
+.ex-btn.active{border-color:#4A90E2;background:#4A90E280 !important}
+.ex-btn-icon{font-size:18px;margin-bottom:4px}
+.ex-btn-label{font-size:12px;font-weight:600;color:#E8ECF0;line-height:1.3}
+.ex-btn-last{font-size:11px;color:#6B7385;margin-top:3px}
+.set-row{display:flex;gap:8px;align-items:center;margin-bottom:8px}
+.set-num{width:24px;height:24px;border-radius:50%;background:#4A90E222;color:#4A90E2;font-size:11px;font-weight:700;display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.set-input{background:#0D0F14;border:1px solid #2A3040;border-radius:8px;color:#E8ECF0;padding:8px 10px;font-size:14px;text-align:center}
+.set-label{font-size:11px;color:#6B7385;text-align:center;margin-top:3px}
+.prog-chart{height:80px;display:flex;align-items:flex-end;gap:4px;margin-top:10px}
+.prog-bar-wrap{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px}
+.prog-bar-inner{width:100%;border-radius:4px 4px 0 0;min-height:4px;transition:height .3s}
+.prog-bar-lbl{font-size:9px;color:#6B7385;text-align:center}
+
 /* AI ASSISTANT */
 .ai-fab{position:fixed;bottom:80px;right:16px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#C8FF00,#8BB000);border:none;font-size:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(200,255,0,.4);z-index:99;cursor:pointer;transition:transform .15s}
 .ai-fab:active{transform:scale(.92)}
@@ -184,6 +200,26 @@ const RESSENTI = ["😴 Épuisé","😐 Moyen","🙂 Bien","💪 Super","🔥 En
 const POSITIONS = ["Pilier G","Talonneur","Pilier D","2ème ligne","Flanker","N°8","Demi de mêlée","Demi d'ouverture","Centre","Ailier","Arrière"];
 const COMPETITIONS = ["Championnat","Coupe","Amical","Tournoi","Autre"];
 
+const EXERCISES = [
+  {id:"squat",         label:"Squat barre",              cat:"force",      icon:"🦵"},
+  {id:"hipthrust",     label:"Hip Thrust",               cat:"force",      icon:"🍑"},
+  {id:"fentes",        label:"Fentes bulgares",           cat:"force",      icon:"🦵"},
+  {id:"legpress",      label:"Leg Press",                cat:"force",      icon:"🦵"},
+  {id:"rdl",           label:"Romanian Deadlift",         cat:"force",      icon:"💪"},
+  {id:"jumpsquat",     label:"Squat sauté",              cat:"explosif",   icon:"⚡"},
+  {id:"foulee",        label:"Foulées bondissantes",      cat:"explosif",   icon:"🏃"},
+  {id:"boxjump",       label:"Box Jump",                 cat:"explosif",   icon:"📦"},
+  {id:"dc",            label:"Développé couché",          cat:"haut",       icon:"💪"},
+  {id:"dm",            label:"Développé militaire",       cat:"haut",       icon:"🏋️"},
+  {id:"tirageh",       label:"Tirage horizontal",         cat:"haut",       icon:"🔙"},
+  {id:"tiragev",       label:"Tirage vertical",           cat:"haut",       icon:"⬇️"},
+  {id:"gainage",       label:"Gainage planche",           cat:"core",       icon:"🧱"},
+  {id:"abwheel",       label:"Ab Wheel",                 cat:"core",       icon:"⚙️"},
+  {id:"goodmorning",   label:"Good Morning",             cat:"core",       icon:"🌅"},
+];
+
+const EX_CATS = {force:"🦵 Force inf.",explosif:"⚡ Explosivité",haut:"💪 Haut du corps",core:"🧱 Gainage"};
+
 const INJURY_PHASES = {
   phase1:{label:"Phase 1 — Immobilisation",sublabel:"Bas du corps + bras gauche uniquement",color:C.red,icon:"🩹",endDate:"2025-06-26"},
   phase2:{label:"Phase 2 — Rééducation",sublabel:"Kiné intensif + reprise progressive",color:C.orange,icon:"🔄",endDate:"2025-07-06"},
@@ -210,6 +246,7 @@ const save = (k,v) => localStorage.setItem(k,JSON.stringify(v));
 let sessions      = load("rp_sessions");
 let matches       = load("rp_matches");
 let autoSessions  = load("rp_auto");
+let chargesLog    = load("rp_charges", []);
 let currentView   = "dashboard";
 let editingItem   = null;
 let calMonth      = today().slice(0,7);
@@ -287,12 +324,12 @@ function exportICS(events,filename){
 function render(){
   renderNav();
   renderPhaseBadge();
-  const views={dashboard:renderDashboard,planning:renderPlanning,kine:renderKine,calendar:renderCalendar,stats:renderStats};
+  const views={dashboard:renderDashboard,planning:renderPlanning,charges:renderCharges,kine:renderKine,calendar:renderCalendar,stats:renderStats};
   document.getElementById("content").innerHTML=(views[currentView]||renderDashboard)();
 }
 
 function renderNav(){
-  const tabs=[{id:"dashboard",icon:"🏠",label:"Home"},{id:"planning",icon:"📅",label:"Saison"},{id:"kine",icon:"🩺",label:"Kiné"},{id:"calendar",icon:"🗓️",label:"Calendrier"},{id:"stats",icon:"📊",label:"Stats"}];
+  const tabs=[{id:"dashboard",icon:"🏠",label:"Home"},{id:"planning",icon:"📅",label:"Saison"},{id:"charges",icon:"🏋️",label:"Charges"},{id:"kine",icon:"🩺",label:"Kiné"},{id:"calendar",icon:"🗓️",label:"Agenda"}];
   document.getElementById("nav").innerHTML=tabs.map(t=>`<button class="nav-btn ${currentView===t.id?"active":""}" onclick="setView('${t.id}')"><span class="nav-icon">${t.icon}</span>${t.label}</button>`).join("");
 }
 
@@ -468,6 +505,155 @@ function renderPlanning(){
 
   if(!matches.length) html+=`<div class="card" style="text-align:center;padding:40px"><div style="font-size:48px">📅</div><div style="color:#6B7385;margin-top:12px;line-height:1.6">Aucun match planifié.<br>Ajoute tes matchs !</div></div>`;
   return html;
+}
+
+
+// ── CHARGES ───────────────────────────────────────────────────────────────────
+let selectedEx = null;
+
+function renderCharges(){
+  let html = `<div class="sec-title">Suivi des charges — sélectionne un exercice</div>`;
+
+  // Cat groups
+  Object.entries(EX_CATS).forEach(([cat, catLabel]) => {
+    html += `<div style="font-size:11px;color:#6B7385;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px">${catLabel}</div>`;
+    html += `<div class="ex-grid">`;
+    EXERCISES.filter(e=>e.cat===cat).forEach(ex => {
+      const logs = chargesLog.filter(l=>l.exId===ex.id);
+      const last = logs[logs.length-1];
+      const maxKg = last ? Math.max(...last.sets.map(s=>s.kg||0)) : null;
+      const isActive = selectedEx === ex.id;
+      html += `<button class="ex-btn ${isActive?"active":""}" onclick="selectEx('${ex.id}')" style="${isActive?"border-color:#4A90E2;background:#4A90E214":""}">
+        <div class="ex-btn-icon">${ex.icon}</div>
+        <div class="ex-btn-label">${ex.label}</div>
+        <div class="ex-btn-last">${maxKg ? maxKg+"kg · "+fmt(last.date) : "Aucune donnée"}</div>
+      </button>`;
+    });
+    html += `</div>`;
+  });
+
+  if(selectedEx){
+    const ex = EXERCISES.find(e=>e.id===selectedEx);
+    const logs = chargesLog.filter(l=>l.exId===selectedEx).slice(-8);
+    html += `<div class="card" style="border-color:#4A90E244;margin-top:4px">
+      <div style="font-size:15px;font-weight:700;color:#4A90E2;margin-bottom:14px">${ex.icon} ${ex.label}</div>`;
+
+    // Mini graph if history
+    if(logs.length > 1){
+      const maxVals = logs.map(l=>Math.max(...l.sets.map(s=>s.kg||0)));
+      const maxAll = Math.max(...maxVals, 1);
+      html += `<div class="sec-title">Progression charge max</div>
+      <div class="prog-chart">`;
+      logs.forEach((l,i) => {
+        const h = Math.round((maxVals[i]/maxAll)*100);
+        html += `<div class="prog-bar-wrap">
+          <div class="prog-bar-inner" style="height:${h}%;background:#4A90E2;width:100%"></div>
+          <div class="prog-bar-lbl">${maxVals[i]}kg</div>
+          <div class="prog-bar-lbl">${fmt(l.date)}</div>
+        </div>`;
+      });
+      html += `</div>`;
+    }
+
+    // Add new entry form
+    html += `<div class="sec-title" style="margin-top:16px">Nouvelle séance — ${today()}</div>
+    <div id="sets-container">`;
+    for(let i=1;i<=4;i++){
+      html += renderSetRow(i);
+    }
+    html += `</div>
+    <button onclick="addSetRow()" style="width:100%;background:#161A23;border:1px solid #2A3040;border-radius:8px;padding:10px;color:#6B7385;font-size:13px;font-weight:600;margin-bottom:12px">+ Ajouter une série</button>
+    <div class="grid2" style="margin-bottom:12px">
+      <div class="field"><label>Date</label><input class="input" type="date" id="ch_date" value="${today()}"/></div>
+      <div class="field"><label>Notes</label><input class="input" id="ch_notes" placeholder="Sensations..."/></div>
+    </div>
+    <button onclick="saveCharges()" style="width:100%;background:#4A90E2;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:15px;letter-spacing:1px">💾 ENREGISTRER LA SÉANCE</button>`;
+
+    // Last sessions history
+    if(logs.length){
+      html += `<div class="sec-title" style="margin-top:18px">Historique</div>`;
+      [...logs].reverse().forEach(l => {
+        html += `<div style="background:#161A23;border:1px solid #2A3040;border-radius:10px;padding:12px 14px;margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+            <div style="font-size:13px;font-weight:600">${fmt(l.date)}</div>
+            <div style="font-size:11px;color:#6B7385">${l.notes||""}</div>
+            <button onclick="deleteCharge('${l.id}')" style="color:#FF4655;font-size:13px;background:none;border:none">🗑️</button>
+          </div>
+          <div style="display:flex;gap:6px;flex-wrap:wrap">
+            ${l.sets.map((s,i)=>`<div style="background:#1E2330;border:1px solid #2A3040;border-radius:8px;padding:5px 10px;font-size:12px;color:#E8ECF0">Série ${i+1} · <strong style="color:#4A90E2">${s.kg}kg</strong> × ${s.reps}</div>`).join("")}
+          </div>
+        </div>`;
+      });
+    }
+
+    html += `</div>`;
+  }
+
+  return html;
+}
+
+let _setCount = 4;
+
+function renderSetRow(i, kg="", reps=""){
+  return `<div class="set-row" id="set_${i}">
+    <div class="set-num">${i}</div>
+    <div style="flex:1">
+      <input class="input set-input" type="number" id="kg_${i}" placeholder="kg" value="${kg}" style="width:100%"/>
+      <div class="set-label">kg</div>
+    </div>
+    <div style="color:#6B7385;font-size:16px">×</div>
+    <div style="flex:1">
+      <input class="input set-input" type="number" id="reps_${i}" placeholder="reps" value="${reps}" style="width:100%"/>
+      <div class="set-label">reps</div>
+    </div>
+  </div>`;
+}
+
+function addSetRow(){
+  _setCount++;
+  const container = document.getElementById("sets-container");
+  if(container){
+    const div = document.createElement("div");
+    div.innerHTML = renderSetRow(_setCount);
+    container.appendChild(div.firstChild);
+  }
+}
+
+function selectEx(id){
+  selectedEx = id;
+  _setCount = 4;
+  render();
+  // Scroll to selected card
+  setTimeout(()=>{
+    const card = document.querySelector(".card");
+    if(card) card.scrollIntoView({behavior:"smooth"});
+  },100);
+}
+
+function saveCharges(){
+  const date = document.getElementById("ch_date")?.value || today();
+  const notes = document.getElementById("ch_notes")?.value || "";
+  const sets = [];
+  for(let i=1;i<=_setCount;i++){
+    const kg = parseFloat(document.getElementById("kg_"+i)?.value);
+    const reps = parseInt(document.getElementById("reps_"+i)?.value);
+    if(kg && reps) sets.push({kg, reps});
+  }
+  if(!sets.length){ alert("Entre au moins une série !"); return; }
+  const entry = {id:Date.now(), exId:selectedEx, date, notes, sets};
+  chargesLog = [...chargesLog, entry];
+  save("rp_charges", chargesLog);
+  selectedEx = null;
+  _setCount = 4;
+  render();
+}
+
+function deleteCharge(id){
+  if(confirm("Supprimer cette entrée ?")){
+    chargesLog = chargesLog.filter(c=>c.id!=id);
+    save("rp_charges", chargesLog);
+    render();
+  }
 }
 
 // ── KINÉ ──────────────────────────────────────────────────────────────────────
@@ -894,7 +1080,12 @@ Mois en cours : juin 2025.`;
   try {
     const response = await fetch("https://api.anthropic.com/v1/messages", {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": "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",
+        "anthropic-version": "2023-06-01",
+        "anthropic-dangerous-direct-browser-access": "true"
+      },
       body: JSON.stringify({
         model: "claude-sonnet-4-6",
         max_tokens: 1000,
