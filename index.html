@@ -109,6 +109,24 @@ input,textarea,select{outline:none;font-family:inherit}
 
 /* ICS EXPORT BTN */
 .ics-btn{width:100%;background:#161A23;border:1px solid rgba(200,255,0,.3);border-radius:10px;padding:12px;color:#C8FF00;font-weight:700;font-size:13px;display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px}
+
+/* AI ASSISTANT */
+.ai-fab{position:fixed;bottom:80px;right:16px;width:52px;height:52px;border-radius:50%;background:linear-gradient(135deg,#C8FF00,#8BB000);border:none;font-size:22px;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 20px rgba(200,255,0,.4);z-index:99;cursor:pointer;transition:transform .15s}
+.ai-fab:active{transform:scale(.92)}
+.ai-panel{position:fixed;bottom:0;left:50%;transform:translateX(-50%);width:100%;max-width:600px;background:#161A23;border-top:1px solid #2A3040;border-radius:20px 20px 0 0;padding:16px;z-index:150;transition:transform .3s;padding-bottom:calc(16px + env(safe-area-inset-bottom))}
+.ai-panel.hidden{transform:translateY(100%)}
+.ai-messages{max-height:280px;overflow-y:auto;margin-bottom:12px;display:flex;flex-direction:column;gap:8px}
+.ai-msg{padding:10px 13px;border-radius:12px;font-size:13px;line-height:1.5;max-width:88%}
+.ai-msg.user{background:#C8FF0022;color:#C8FF00;align-self:flex-end;border:1px solid #C8FF0044}
+.ai-msg.assistant{background:#1E2330;color:#E8ECF0;align-self:flex-start;border:1px solid #2A3040}
+.ai-msg.loading{color:#6B7385;font-style:italic}
+.ai-input-row{display:flex;gap:8px;align-items:flex-end}
+.ai-input{flex:1;background:#0D0F14;border:1px solid #2A3040;border-radius:12px;color:#E8ECF0;padding:10px 13px;font-size:14px;resize:none;min-height:44px;max-height:100px;line-height:1.4}
+.ai-send{background:#C8FF00;color:#000;border:none;border-radius:10px;padding:10px 14px;font-weight:800;font-size:15px;flex-shrink:0;height:44px}
+.ai-send:disabled{background:#2A3040;color:#6B7385}
+.ai-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+.ai-title{font-size:14px;font-weight:700;color:#C8FF00}
+.ai-close{color:#6B7385;font-size:18px;background:none;border:none}
 </style>
 </head>
 <body>
@@ -127,6 +145,24 @@ input,textarea,select{outline:none;font-family:inherit}
 <!-- MODAL -->
 <div class="modal-overlay" id="modal" style="display:none" onclick="if(event.target===this)closeModal()">
   <div class="modal" id="modal-inner"></div>
+</div>
+
+<!-- AI FAB -->
+<button class="ai-fab" onclick="toggleAI()" id="ai-fab">🤖</button>
+
+<!-- AI PANEL -->
+<div class="ai-panel hidden" id="ai-panel">
+  <div class="ai-header">
+    <div class="ai-title">🤖 Assistant Rugby Perf</div>
+    <button class="ai-close" onclick="toggleAI()">✕</button>
+  </div>
+  <div class="ai-messages" id="ai-messages">
+    <div class="ai-msg assistant">Salut Louis ! 👋 Dis-moi ce que tu veux ajouter — séance, match, kiné... Je m'occupe de tout !</div>
+  </div>
+  <div class="ai-input-row">
+    <textarea class="ai-input" id="ai-input" placeholder="Ex: Kiné lundi 29 juin à 11h avec Guillaume" rows="1" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAI()}"></textarea>
+    <button class="ai-send" id="ai-send" onclick="sendAI()">↑</button>
+  </div>
 </div>
 
 <script>
@@ -781,6 +817,139 @@ function openModal(html){
   document.getElementById("modal").style.display="flex";
 }
 function closeModal(){ document.getElementById("modal").style.display="none"; editingItem=null; render(); }
+
+
+// ── AI ASSISTANT ──────────────────────────────────────────────────────────────
+let aiOpen = false;
+let aiHistory = [];
+
+function toggleAI(){
+  aiOpen = !aiOpen;
+  const panel = document.getElementById("ai-panel");
+  const fab = document.getElementById("ai-fab");
+  if(aiOpen){
+    panel.classList.remove("hidden");
+    fab.style.display = "none";
+    document.getElementById("ai-input").focus();
+  } else {
+    panel.classList.add("hidden");
+    fab.style.display = "flex";
+  }
+}
+
+function addAIMsg(role, text){
+  const msgs = document.getElementById("ai-messages");
+  const div = document.createElement("div");
+  div.className = "ai-msg " + role;
+  div.textContent = text;
+  msgs.appendChild(div);
+  msgs.scrollTop = msgs.scrollHeight;
+  return div;
+}
+
+async function sendAI(){
+  const input = document.getElementById("ai-input");
+  const btn = document.getElementById("ai-send");
+  const text = input.value.trim();
+  if(!text) return;
+
+  input.value = "";
+  btn.disabled = true;
+  addAIMsg("user", text);
+  aiHistory.push({role:"user", content: text});
+
+  const loadingDiv = addAIMsg("assistant loading", "...");
+
+  const todayStr = today();
+  const systemPrompt = `Tu es l'assistant de l'app Rugby Perf de Louis, demi de mêlée de 28 ans avec une fracture au poignet droit.
+Ta mission : analyser ce que dit Louis et retourner UNIQUEMENT un JSON valide (sans markdown, sans texte autour) avec cette structure :
+{
+  "action": "add_session" | "add_match" | "none",
+  "message": "Message de confirmation en français",
+  "data": { ... }
+}
+
+Pour add_session, data contient :
+- type: "terrain" | "muscu" | "match" | "recup" | "kine"
+- date: "YYYY-MM-DD" (aujourd'hui = ${todayStr})
+- duree: nombre en minutes (optionnel)
+- ressenti: 0-4 (optionnel, défaut 2)
+- notes: string (optionnel)
+- Pour kine: kineZone (défaut "Poignet droit"), kinePraticien
+- Pour terrain: focus
+- Pour match: adversaire, score, resultat (V/D/N), tpsJeu, poste (défaut "Demi de mêlée")
+- Pour recup: recupType
+
+Pour add_match (planning futur), data contient :
+- date: "YYYY-MM-DD"
+- adversaire: string
+- heure: "HH:MM" (défaut "15:00")
+- lieu: "D" | "E" | "N" (défaut "D")
+- competition: string (défaut "Championnat")
+
+Si tu ne comprends pas ou si c'est une question, retourne action "none" avec un message d'aide.
+Interprète les dates en français : "lundi prochain", "29 juin", "demain", etc. par rapport à aujourd'hui ${todayStr}.
+Mois en cours : juin 2025.`;
+
+  try {
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        model: "claude-sonnet-4-6",
+        max_tokens: 1000,
+        system: systemPrompt,
+        messages: aiHistory
+      })
+    });
+
+    const data = await response.json();
+    const rawText = data.content?.[0]?.text || "{}";
+
+    let result;
+    try { result = JSON.parse(rawText); }
+    catch { result = {action:"none", message:"Je n'ai pas bien compris, peux-tu reformuler ?"}; }
+
+    loadingDiv.classList.remove("loading");
+    loadingDiv.textContent = result.message || "OK !";
+    aiHistory.push({role:"assistant", content: result.message || "OK !"});
+
+    if(result.action === "add_session" && result.data){
+      const s = {
+        id: Date.now(),
+        type: result.data.type || "terrain",
+        date: result.data.date || todayStr,
+        duree: result.data.duree || 0,
+        ressenti: result.data.ressenti ?? 2,
+        notes: result.data.notes || "",
+        ...result.data
+      };
+      sessions = [...sessions, s];
+      save("rp_sessions", sessions);
+      render();
+    }
+
+    if(result.action === "add_match" && result.data){
+      const m = {
+        id: Date.now(),
+        date: result.data.date,
+        adversaire: result.data.adversaire || "Inconnu",
+        heure: result.data.heure || "15:00",
+        lieu: result.data.lieu || "D",
+        competition: result.data.competition || "Championnat"
+      };
+      matches = [...matches, m];
+      save("rp_matches", matches);
+      render();
+    }
+
+  } catch(err) {
+    loadingDiv.classList.remove("loading");
+    loadingDiv.textContent = "Erreur de connexion. Réessaie !";
+  }
+
+  btn.disabled = false;
+}
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 render();
