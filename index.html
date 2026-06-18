@@ -84,6 +84,7 @@ input,textarea,select{outline:none;font-family:inherit}
 .cal-day.is-today{background:rgba(200,255,0,.12);border-color:#C8FF00}
 .cal-day.has-match{background:rgba(255,70,85,.12);border-color:rgba(255,70,85,.4)}
 .cal-day.has-kine{background:rgba(233,30,140,.12);border-color:rgba(233,30,140,.3)}
+.cal-day.has-forme{background:rgba(255,107,157,.12);border-color:rgba(255,107,157,.4)}
 .cal-day-num{font-size:12px}
 .cal-dots{display:flex;gap:2px;flex-wrap:wrap;justify-content:center}
 .cal-dot{width:6px;height:6px;border-radius:50%}
@@ -214,7 +215,7 @@ input,textarea,select{outline:none;font-family:inherit}
 // ── DATA ──────────────────────────────────────────────────────────────────────
 const C = {
   accent:"#C8FF00",red:"#FF4655",blue:"#4A90E2",purple:"#9B59B6",
-  teal:"#1ABC9C",orange:"#F39C12",pink:"#E91E8C",muted:"#6B7385"
+  teal:"#1ABC9C",orange:"#F39C12",pink:"#E91E8C",muted:"#6B7385",forme:"#FF6B9D"
 };
 
 const SESSION_TYPES = {
@@ -223,6 +224,7 @@ const SESSION_TYPES = {
   match:{label:"Match",icon:"⚔️",color:C.red},
   recup:{label:"Récup",icon:"💤",color:C.teal},
   kine:{label:"Kiné",icon:"🩺",color:C.pink},
+  forme:{label:"Forme",icon:"❤️",color:C.forme},
 };
 
 const RESSENTI = ["😴 Épuisé","😐 Moyen","🙂 Bien","💪 Super","🔥 En feu"];
@@ -519,6 +521,7 @@ function renderSessionCard(s){
     ${s.type==="match"?`<div style="margin-top:8px">${s.adversaire?tag(C.muted,"vs "+s.adversaire):""}${s.score?tag(s.resultat==="V"?C.accent:s.resultat==="D"?C.red:C.muted,s.score):""}${s.poste?tag(C.blue,s.poste):""}</div>`:""}
     ${s.type==="kine"?`<div style="font-size:12px;color:${C.pink};margin-top:6px">🩺 ${s.kineZone||"Poignet droit"}${s.kinePraticien?" · "+s.kinePraticien:""}</div>`:""}
     ${s.type==="terrain"&&s.focus?`<div style="font-size:12px;color:#6B7385;margin-top:6px">🎯 ${s.focus}</div>`:""}
+    ${s.type==="forme"&&s.formeNote?`<div style="font-size:12px;color:${C.forme};margin-top:6px">❤️ ${s.formeNote}</div>`:""}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
       <div style="font-size:12px">${RESSENTI[s.ressenti]||""}</div>
       ${s.notes&&!s.auto?`<div style="font-size:11px;color:#6B7385;max-width:55%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.notes}</div>`:""}
@@ -1452,8 +1455,9 @@ function renderCalendar(){
     const isToday=ds===today();
     const hasMatch=evts.some(e=>e._k==="planned");
     const hasKine=evts.some(e=>e.type==="kine");
-    const cls=["cal-day",evts.length?"has-events":"",isToday?"is-today":"",hasMatch?"has-match":hasKine?"has-kine":""].filter(Boolean).join(" ");
-    const numColor=hasMatch?C.red:hasKine?C.pink:isToday?C.accent:"#E8ECF0";
+    const hasForme=evts.some(e=>e.type==="forme");
+    const cls=["cal-day",evts.length?"has-events":"",isToday?"is-today":"",hasMatch?"has-match":hasKine?"has-kine":hasForme?"has-forme":""].filter(Boolean).join(" ");
+    const numColor=hasMatch?C.red:hasKine?C.pink:hasForme?C.forme:isToday?C.accent:"#E8ECF0";
     html+=`<div class="${cls}" ${evts.length?`onclick="showDayModal('${ds}')"`:""}">
       <span class="cal-day-num" style="font-weight:${isToday?700:400};color:${numColor}">${day}</span>
       <div class="cal-dots">${evts.slice(0,4).map(e=>`<div class="cal-dot" style="background:${dotColor(e)}"></div>`).join("")}</div>
@@ -1462,7 +1466,7 @@ function renderCalendar(){
 
   html+=`</div>
   <div class="cal-legend">
-    ${[{c:C.red,l:"Match"},{c:C.accent,l:"Terrain"},{c:C.pink,l:"Kiné"},{c:C.orange,l:"Force"},{c:C.purple,l:"Activation"},{c:C.teal,l:"Récup"},{c:C.blue,l:"Volume"}]
+    ${[{c:C.red,l:"Match"},{c:C.accent,l:"Terrain"},{c:C.pink,l:"Kiné"},{c:C.orange,l:"Force"},{c:C.purple,l:"Activation"},{c:C.teal,l:"Récup"},{c:C.blue,l:"Volume"},{c:C.forme,l:"Forme ❤️"}]
       .map(x=>`<div class="cal-leg-item"><div class="cal-leg-dot" style="background:${x.c}"></div>${x.l}</div>`).join("")}
   </div></div>`;
   return html;
@@ -1602,6 +1606,7 @@ function renderTypeFields(type,s={}){
   if(type==="match") return `<div class="grid2"><div class="field"><label>Adversaire</label><input class="input" id="f_adversaire" value="${s.adversaire||""}"/></div><div class="field"><label>Score</label><input class="input" id="f_score" placeholder="24-18" value="${s.score||""}"/></div></div><div class="grid3"><div class="field"><label>Résultat</label><select class="input" id="f_resultat"><option value="V" ${s.resultat==="V"?"selected":""}>Victoire 🏆</option><option value="D" ${s.resultat==="D"?"selected":""}>Défaite</option><option value="N" ${s.resultat==="N"?"selected":""}>Nul</option></select></div><div class="field"><label>Tps jeu (min)</label><input class="input" type="number" id="f_tpsjeu" value="${s.tpsJeu||""}"/></div><div class="field"><label>Poste</label><select class="input" id="f_poste"><option value="">—</option>${POSITIONS.map(p=>`<option ${s.poste===p?"selected":""}>${p}</option>`).join("")}</select></div></div>`;
   if(type==="kine") return `<div class="field"><label>Zone travaillée</label><input class="input" id="f_kinezone" value="${s.kineZone||"Poignet droit"}"/></div><div class="field"><label>Praticien (optionnel)</label><input class="input" id="f_kineprat" value="${s.kinePraticien||""}"/></div>`;
   if(type==="recup") return `<div class="field"><label>Type</label><input class="input" id="f_recuptype" placeholder="Étirements, bain froid..." value="${s.recupType||""}"/></div>`;
+  if(type==="forme") return `<div class="field"><label>Note (énergie, douleurs, moral…)</label><input class="input" id="f_formenote" placeholder="Ex: Jambes lourdes, bonne énergie..." value="${s.formeNote||""}"/></div>`;
   return "";
 }
 
@@ -1655,6 +1660,7 @@ function submitSession(){
   else if(type==="match") extra={adversaire:document.getElementById("f_adversaire").value,score:document.getElementById("f_score").value,resultat:document.getElementById("f_resultat").value,tpsJeu:Number(document.getElementById("f_tpsjeu").value)||0,poste:document.getElementById("f_poste").value};
   else if(type==="kine") extra={kineZone:document.getElementById("f_kinezone").value,kinePraticien:document.getElementById("f_kineprat").value};
   else if(type==="recup") extra={recupType:document.getElementById("f_recuptype").value};
+  else if(type==="forme") extra={formeNote:document.getElementById("f_formenote").value};
   const session={...base,...extra};
   if(editingItem?.id) sessions=sessions.map(s=>s.id===session.id?session:s);
   else sessions=[...sessions,session];
