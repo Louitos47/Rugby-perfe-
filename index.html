@@ -638,7 +638,7 @@ function openSessionDetail(id, kind){
     💾 ENREGISTRER LE COMMENTAIRE
   </button>
   <div style="display:flex;gap:8px">
-    ${kind!=="auto"?`<button onclick="closeModal();editSession('${id}')" style="flex:1;background:#161A23;border:1px solid #2A3040;border-radius:10px;padding:11px;color:#E8ECF0;font-weight:600;font-size:13px">✏️ Modifier</button>`:""}
+    ${kind!=="auto"?`<button onclick="editSession('${id}')" style="flex:1;background:#161A23;border:1px solid #2A3040;border-radius:10px;padding:11px;color:#E8ECF0;font-weight:600;font-size:13px">✏️ Modifier</button>`:""}
     <button onclick="closeModal();deleteAnySession('${id}','${kind}')" style="flex:1;background:#FF465518;border:1px solid #FF465544;border-radius:10px;padding:11px;color:#FF4655;font-weight:600;font-size:13px">🗑️ Supprimer</button>
     <button onclick="closeModal()" style="flex:1;background:#161A23;border:1px solid #2A3040;border-radius:10px;padding:11px;color:#6B7385;font-weight:600;font-size:13px">Fermer</button>
   </div>
@@ -1662,7 +1662,8 @@ function submitSession(){
   else if(type==="recup") extra={recupType:document.getElementById("f_recuptype").value};
   else if(type==="forme") extra={formeNote:document.getElementById("f_formenote").value};
   const session={...base,...extra};
-  if(editingItem?.id) sessions=sessions.map(s=>s.id===session.id?session:s);
+  const existsInArray=sessions.some(s=>s.id==session.id);
+  if(editingItem?.id||existsInArray) sessions=sessions.map(s=>s.id==session.id?session:s);
   else sessions=[...sessions,session];
   save("rp_sessions",sessions);
   closeModal(); render();
