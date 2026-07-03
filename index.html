@@ -1322,26 +1322,12 @@ function renderBilansReminder(){
 function renderDashboard(){
   const allS = [...sessions, ...autoSessions];
   const sorted = allS.sort((a,b)=>b.date.localeCompare(a.date));
-  const mSess = sessions.filter(s=>s.date.startsWith(today().slice(0,7)));
-  const wSess = sessions.filter(s=>weekKey(s.date)===weekKey(today()));
   const nextMatch = matches.filter(m=>m.date>=today()).sort((a,b)=>a.date.localeCompare(b.date))[0];
 
-  let html = `
-  <div class="card">
-    <div style="display:flex;align-items:center;gap:12px">
-      <div style="width:44px;height:44px;border-radius:50%;background:#8B1A1A18;border:2px solid #8B1A1A44;display:flex;align-items:center;justify-content:center;font-size:20px">🏉</div>
-      <div>
-        <div style="font-size:16px;font-weight:800">${userProfile?.nom||''} ${userProfile?.nom_famille||''}</div>
-        <div style="font-size:12px;color:#9A7A70">${userPoste()}${userProfile?.equipe?' · '+userProfile.equipe:''}${userProfile?.niveau?' · '+userProfile.niveau:''}</div>
-      </div>
-    </div>
-  </div>
-  <div class="stat-row">
-    <div class="stat-box"><div class="stat-val" style="color:#8B1A1A">${mSess.length}</div><div class="stat-lbl">Ce mois</div></div>
-    <div class="stat-box"><div class="stat-val" style="color:#4A90E2">${wSess.length}</div><div class="stat-lbl">Cette semaine</div></div>
-    <div class="stat-box"><div class="stat-val" style="color:#1ABC9C">${sessions.length}</div><div class="stat-lbl">Total</div></div>
-  </div>`;
-
+  // Home épuré : annonces du staff, rappels, forme du jour, prochain match,
+  // prochaines séances et séances récentes — pas de bloc profil ni compteurs.
+  let html = renderTeamAnnouncementsBar();
+  html += renderProposedSessionsInbox();
   html += renderBilansReminder();
   html += renderTodayReminders();
   html += renderFormeDashboard();
@@ -5904,7 +5890,7 @@ function renderExerciseLibraryModal(){
   const html = "<div style=\"position:relative\">" +
     "<div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:12px\">" +
     "<div style=\"font-size:15px;font-weight:800\">🔍 Choisir un exercice</div>" +
-    "<span onclick=\"closeModal()\" style=\"font-size:22px;color:#9A7A70;cursor:pointer;padding:4px 8px\">×</span>" +
+    "<span onclick=\"renderSessionForm()\" style=\"font-size:22px;color:#9A7A70;cursor:pointer;padding:4px 8px\">×</span>" +
     "</div>" +
     // Barre de recherche
     "<input class=\"input\" id=\"lib-search\" placeholder=\"Rechercher un exercice...\" value=\"" + _libFilter.search + "\" style=\"margin-bottom:10px\" oninput=\"updateLibSearch(this.value)\"/>" +
@@ -5962,8 +5948,9 @@ function setLibFilter(key, val){
 
 function addExFromLibrary(nom){
   if(!sessionSets[nom]) sessionSets[nom] = [{kg:'', reps:''}];
-  closeModal();
-  // Rouvrir le formulaire de séance avec le nouvel exercice
+  // Rouvrir le formulaire de séance avec le nouvel exercice.
+  // Surtout ne PAS appeler closeModal() ici : il remettrait editingItem à null
+  // et une séance en cours de modification serait dupliquée au lieu d'être mise à jour.
   renderSessionForm();
 }
 
