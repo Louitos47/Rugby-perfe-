@@ -2589,9 +2589,19 @@ async function publishAnnouncement(){
   if(error){ showToast('Erreur : '+error.message, 'error'); return; }
   document.getElementById('announcement-text').value = '';
   showToast('Annonce publiée à toute l\'équipe !', 'success');
-  // Notification push : désactivée côté client (la clé API OneSignal ne doit
-  // jamais être dans ce fichier public — à réintroduire via une fonction
-  // serveur, ex. Supabase Edge Function, qui garde la clé secrète)
+  // Notification push via l'Edge Function send-push (la clé OneSignal reste côté serveur)
+  try {
+    const {data:{session}} = await sb.auth.getSession();
+    await fetch(SUPABASE_URL + '/functions/v1/send-push', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON,
+        'Authorization': 'Bearer ' + (session?.access_token || SUPABASE_ANON)
+      },
+      body: JSON.stringify({team_id: team.id, title: '📣 ' + (team.name || 'Rugby Perf'), message})
+    });
+  } catch(e) { console.log('Push notification failed:', e); }
   loadAnnouncements(team.id);
 }
 
