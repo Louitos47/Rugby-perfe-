@@ -1329,6 +1329,7 @@ function renderDashboard(){
   // prochaines séances et séances récentes — pas de bloc profil ni compteurs.
   let html = renderTeamAnnouncementsBar();
   html += renderProposedSessionsInbox();
+  html += renderNotifTutoCard();
   html += renderBilansReminder();
   html += renderTodayReminders();
   html += renderFormeDashboard();
@@ -7416,6 +7417,114 @@ async function boot(){
       renderAuthScreen();
     }
   });
+}
+
+// ── TUTO NOTIFICATIONS PUSH (guide joueurs) ──────────────────────────────────
+function isIOSDevice(){
+  return /iPad|iPhone|iPod/.test(navigator.userAgent)
+    || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+}
+function isStandaloneApp(){
+  return window.matchMedia('(display-mode: standalone)').matches || window.navigator.standalone === true;
+}
+function notifsGranted(){
+  return typeof Notification !== 'undefined' && Notification.permission === 'granted';
+}
+
+function shouldShowNotifTuto(){
+  if(notifsGranted()) return false;
+  try {
+    const dis = parseInt(localStorage.getItem('rp_notif_tuto_dismissed')||'0');
+    if(dis && (Date.now() - dis) < 7*86400000) return false; // repropose après 7 jours
+  } catch(e){}
+  return true;
+}
+
+function dismissNotifTuto(){
+  try { localStorage.setItem('rp_notif_tuto_dismissed', String(Date.now())); } catch(e){}
+  render();
+}
+
+function renderNotifTutoCard(){
+  if(!shouldShowNotifTuto()) return '';
+  return `<div class="card" style="border-color:#D4841A44;background:#D4841A08">
+    <div style="display:flex;align-items:center;gap:12px">
+      <span style="font-size:26px">🔔</span>
+      <div style="flex:1;cursor:pointer" onclick="openNotifTuto()">
+        <div style="font-size:13px;font-weight:800;color:#D4841A">Active les notifications</div>
+        <div style="font-size:11px;color:#9A7A70;margin-top:2px">Reçois les annonces du staff directement sur ton téléphone — 30 secondes</div>
+      </div>
+      <span style="color:#D4841A;font-size:20px">›</span>
+      <button onclick="event.stopPropagation();dismissNotifTuto()" style="background:none;border:none;color:#9A7A70;font-size:18px;padding:4px 8px">✕</button>
+    </div>
+  </div>`;
+}
+
+function notifTutoStep(num, icon, title, desc){
+  return `<div style="display:flex;gap:12px;align-items:flex-start;margin-bottom:14px">
+    <div style="width:30px;height:30px;border-radius:50%;background:#D4841A18;border:2px solid #D4841A44;color:#D4841A;font-weight:800;font-size:13px;display:flex;align-items:center;justify-content:center;flex-shrink:0">${num}</div>
+    <div>
+      <div style="font-size:14px;font-weight:700">${icon} ${title}</div>
+      <div style="font-size:12px;color:#9A7A70;margin-top:2px;line-height:1.5">${desc}</div>
+    </div>
+  </div>`;
+}
+
+function openNotifTuto(){
+  const ios = isIOSDevice();
+  const standalone = isStandaloneApp();
+  const denied = typeof Notification !== 'undefined' && Notification.permission === 'denied';
+  let html = `<div class="modal-title">🔔 ACTIVER LES NOTIFICATIONS</div>`;
+
+  if(notifsGranted()){
+    html += `<div style="text-align:center;padding:20px">
+      <div style="font-size:44px">✅</div>
+      <div style="font-size:15px;font-weight:800;margin-top:10px">C'est déjà activé !</div>
+      <div style="font-size:13px;color:#9A7A70;margin-top:6px">Tu recevras les annonces du staff sur ce téléphone.</div>
+    </div>`;
+  } else if(ios && !standalone){
+    html += `<div style="background:#2E86AB0C;border:1px solid #2E86AB33;border-radius:10px;padding:10px 12px;margin-bottom:16px;font-size:12px;color:#2E86AB;line-height:1.5">
+      Sur iPhone, les notifications ne fonctionnent que si Rugby Perf est installée sur ton écran d'accueil. C'est une règle d'Apple — l'installation prend 30 secondes :
+    </div>`;
+    html += notifTutoStep(1, '📤', 'Ouvre le menu Partager', 'Dans Safari, touche le carré avec la flèche vers le haut, en bas au centre de l\'écran.');
+    html += notifTutoStep(2, '📲', '« Sur l\'écran d\'accueil »', 'Fais défiler la liste et touche « Sur l\'écran d\'accueil », puis « Ajouter » en haut à droite.');
+    html += notifTutoStep(3, '🏉', 'Ouvre l\'app depuis la nouvelle icône', 'Rugby Perf apparaît maintenant comme une vraie app sur ton écran d\'accueil. Ouvre-la depuis cette icône.');
+    html += notifTutoStep(4, '🔔', 'Accepte les notifications', 'Au premier lancement, reviens ici (🔔 sur l\'accueil) et accepte quand ton téléphone te le demande.');
+  } else if(denied){
+    html += `<div style="background:#C0392B0C;border:1px solid #C0392B33;border-radius:10px;padding:12px;margin-bottom:14px;font-size:12px;color:#C0392B;line-height:1.5">
+      Les notifications ont été refusées sur cet appareil. Pour les réactiver :
+    </div>`;
+    if(ios){
+      html += notifTutoStep(1, '⚙️', 'Ouvre les Réglages de ton iPhone', 'Puis descends jusqu\'à trouver « Rugby Perf » dans la liste des apps.');
+      html += notifTutoStep(2, '🔔', 'Notifications', 'Touche « Notifications » et active « Autoriser les notifications ».');
+    } else {
+      html += notifTutoStep(1, '⚙️', 'Paramètres du navigateur', 'Touche l\'icône 🔒 ou ⓘ à gauche de l\'adresse du site.');
+      html += notifTutoStep(2, '🔔', 'Notifications → Autoriser', 'Change le réglage Notifications sur « Autoriser », puis recharge la page.');
+    }
+  } else {
+    html += `<div style="text-align:center;padding:8px 0 16px">
+      <div style="font-size:44px">📣</div>
+      <div style="font-size:13px;color:#9A7A70;margin-top:10px;line-height:1.6">Annonces du staff, rappels de séances…<br>Reçois tout directement sur ton téléphone.</div>
+    </div>
+    <button onclick="enableNotifsNow()" style="width:100%;background:#D4841A;color:#fff;border:none;border-radius:12px;padding:14px;font-weight:800;font-size:14px;letter-spacing:0.5px">🔔 ACTIVER MAINTENANT</button>
+    <div style="font-size:11px;color:#9A7A70;text-align:center;margin-top:10px">Ton téléphone va te demander la permission — touche « Autoriser ».</div>`;
+  }
+
+  html += `<button onclick="closeModal()" style="width:100%;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:10px;padding:12px;color:#9A7A70;font-weight:600;margin-top:14px">Fermer</button>`;
+  openModal(html);
+}
+
+async function enableNotifsNow(){
+  try {
+    window.OneSignalDeferred = window.OneSignalDeferred || [];
+    OneSignalDeferred.push(async function(OneSignal){
+      await OneSignal.Notifications.requestPermission();
+      setTimeout(() => { openNotifTuto(); render(); }, 600);
+    });
+  } catch(e){
+    try { await Notification.requestPermission(); openNotifTuto(); render(); }
+    catch(e2){ showToast('Impossible de demander la permission', 'error'); }
+  }
 }
 
 // OneSignal Push Notifications
