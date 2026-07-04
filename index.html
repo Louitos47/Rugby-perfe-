@@ -234,6 +234,8 @@ const SUPABASE_URL = 'https://fmubvbjhecepafvyczid.supabase.co';
 const SUPABASE_ANON = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImZtdWJ2YmpoZWNlcGFmdnljemlkIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODE4NDA5NzIsImV4cCI6MjA5NzQxNjk3Mn0.7qVDRMlAvRt6sKNP29G41yfCjbqbyoiW1Zz81xEnBQM';
 const { createClient } = supabase;
 const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
+// Edge Function d'envoi des notifications push (nom de la fonction déployée sur Supabase)
+const PUSH_FN_URL = SUPABASE_URL + '/functions/v1/rapid-action';
 
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let currentUser = null;
@@ -2638,10 +2640,10 @@ async function publishAnnouncement(){
   if(error){ showToast('Erreur : '+error.message, 'error'); return; }
   document.getElementById('announcement-text').value = '';
   showToast('Annonce publiée à toute l\'équipe !', 'success');
-  // Notification push via l'Edge Function send-push (la clé OneSignal reste côté serveur)
+  // Notification push via l'Edge Function (la clé OneSignal reste côté serveur)
   try {
     const {data:{session}} = await sb.auth.getSession();
-    await fetch(SUPABASE_URL + '/functions/v1/send-push', {
+    await fetch(PUSH_FN_URL, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -4776,7 +4778,7 @@ async function publishMatchReport(){
   // Notification push aux joueurs
   try {
     const {data:{session}} = await sb.auth.getSession();
-    await fetch(SUPABASE_URL + '/functions/v1/send-push', {
+    await fetch(PUSH_FN_URL, {
       method: 'POST',
       headers: {'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+(session?.access_token||SUPABASE_ANON)},
       body: JSON.stringify({team_id: team.id, title: '📊 ' + (team.name||'Rugby Perf'), message: 'Nouveau rapport : ' + title})
