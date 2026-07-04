@@ -238,13 +238,17 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 const PUSH_FN_URL = SUPABASE_URL + '/functions/v1/rapid-action';
 
 // Envoie une notification push (via la fonction serveur).
-// Sans recipientId : toute l'équipe. Avec recipientId : cette personne uniquement.
+// - recipientId absent : toute l'équipe (réservé staff, sauf opts.chat pour le chat)
+// - recipientId = un id : cette personne uniquement
+// - recipientId = tableau d'ids : ces personnes uniquement (groupes de chat)
 // Ne bloque jamais l'action principale : les erreurs sont seulement loguées.
-async function sendPushToTeam(teamId, title, message, recipientId){
+async function sendPushToTeam(teamId, title, message, recipientId, opts={}){
   try {
     const {data:{session}} = await sb.auth.getSession();
     const body = {team_id: teamId, title, message};
-    if(recipientId) body.recipient_id = recipientId;
+    if(Array.isArray(recipientId)) body.recipient_ids = recipientId;
+    else if(recipientId) body.recipient_id = recipientId;
+    if(opts.chat) body.chat = true;
     await fetch(PUSH_FN_URL, {
       method: 'POST',
       headers: {
@@ -3535,6 +3539,19 @@ async function sendChatMessage(){
   const {error} = await sb.from('team_messages').insert({team_id: teamId, user_id: currentUser.id, message, channel_id: activeChatChannelId});
   if(error){ showToast('Erreur : '+error.message, 'error'); return; }
   input.value = '';
+  // Notification aux destinataires du message
+  const teamName = myTeams.find(t => t.id === teamId)?.name || 'Rugby Perf';
+  const preview = userName() + ' : ' + message.slice(0, 120);
+  const channel = chatChannels.find(c => c.id === activeChatChannelId);
+  if(channel){
+    // Groupe : notifier uniquement les membres dont le rôle fait partie du groupe
+    const {data: members} = await sb.from('team_members').select('user_id').eq('team_id', teamId).in('role', channel.roles||[]);
+    const ids = [...new Set((members||[]).map(m => m.user_id))].filter(id => id !== currentUser.id);
+    if(ids.length) sendPushToTeam(teamId, '💬 ' + channel.name + ' — ' + teamName, preview, ids);
+  } else {
+    // Canal général : toute l'équipe
+    sendPushToTeam(teamId, '💬 ' + teamName, preview, null, {chat: true});
+  }
   loadChatMessages(teamId);
 }
 
