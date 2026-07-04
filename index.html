@@ -1203,7 +1203,7 @@ function render(){
   if(isPureCoach()){
     renderCoachNav();
     const el = document.getElementById('content');
-    const coachViews = {coach_rapports: renderCoachReports, coach_profil: renderCoachProfil};
+    const coachViews = {coach_rapports: renderCoachReports, coach_chat: renderCoachChat, coach_profil: renderCoachProfil};
     if(!coachViews[currentView]) currentView = 'coach_rapports';
     if(el) el.innerHTML = (coachViews[currentView]||renderCoachReports)();
     return;
@@ -1248,7 +1248,7 @@ function renderPrepaNav(){
 function renderCoachNav(){
   const navEl = document.getElementById('nav');
   if(!navEl) return;
-  const coachTabs=[{id:"coach_rapports",icon:"📊",label:"Rapports"},{id:"coach_profil",icon:"👤",label:"Profil"}];
+  const coachTabs=[{id:"coach_rapports",icon:"📊",label:"Rapports"},{id:"coach_chat",icon:"💬",label:"Chat"},{id:"coach_profil",icon:"👤",label:"Profil"}];
   navEl.innerHTML=coachTabs.map(t=>{
     const isActive = currentView===t.id;
     return `<button class="nav-btn ${isActive?"active":""}" onclick="setView('${t.id}')">
@@ -3228,13 +3228,14 @@ let chatPollingInterval = null;
 function renderManagerChat(){
   const team = getManagerTeam();
   if(!team) return '';
-  let html = '<div id="chat-messages" style="min-height:200px;max-height:60vh;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
+  let html = '<div id="chat-channels-bar"></div>' +
+    '<div id="chat-messages" style="min-height:200px;max-height:60vh;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
     '<div style="display:flex;gap:8px;position:sticky;bottom:0;background:var(--bg,#F5EEE8);padding:4px 0">' +
     '<input class="input" id="chat-input" placeholder="Votre message..." style="flex:1"/>' +
     '<button onclick="sendChatMessage()" style="background:#2E86AB;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700">➤</button>' +
     '</div>';
   setTimeout(()=>{
-    loadChatMessages(team.id);
+    initChatView(team.id);
     setTimeout(()=>{
       const inp = document.getElementById('chat-input');
       if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter') sendChatMessage(); });
@@ -3243,19 +3244,126 @@ function renderManagerChat(){
   return html;
 }
 
+// ── GROUPES DE DISCUSSION ─────────────────────────────────────────────────────
+let chatChannels = [];        // groupes du chat de l'équipe affichée
+let activeChatChannelId = null; // null = canal général « Équipe »
+let _chatTeamId = null;       // équipe dont le chat est ouvert
+
+function myRolesForTeam(teamId){
+  return myTeams.filter(t => t.id === teamId).map(t => t.myRole);
+}
+
+function canManageChannels(teamId){
+  const roles = myRolesForTeam(teamId);
+  return roles.includes('manager') || roles.includes('coach');
+}
+
+async function initChatView(teamId){
+  _chatTeamId = teamId;
+  activeChatChannelId = null;
+  await loadChatChannels(teamId);
+  paintChatChannelBar();
+  loadChatMessages(teamId);
+}
+
+async function loadChatChannels(teamId){
+  try {
+    const {data} = await sb.from('chat_channels').select('*').eq('team_id', teamId).order('created_at', {ascending:true});
+    const myRoles = myRolesForTeam(teamId);
+    // Ne montrer que les groupes auxquels un de mes rôles donne accès
+    chatChannels = (data||[]).filter(c => (c.roles||[]).some(r => myRoles.includes(r)));
+  } catch(e){ chatChannels = []; }
+}
+
+function paintChatChannelBar(){
+  const bar = document.getElementById('chat-channels-bar');
+  if(!bar) return;
+  const chip = (active, label, onclick) =>
+    `<button onclick="${onclick}" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:1.5px solid ${active?'#2E86AB':'#E8D8D0'};background:${active?'#2E86AB18':'#FFFFFF'};color:${active?'#2E86AB':'#9A7A70'};font-size:12px;font-weight:700;cursor:pointer">${label}</button>`;
+  let html = `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px;align-items:center">`;
+  html += chip(activeChatChannelId===null, '💬 Équipe', 'switchChatChannel(null)');
+  chatChannels.forEach(c => {
+    html += chip(activeChatChannelId===c.id, escHtml(c.name), `switchChatChannel(${c.id})`);
+  });
+  if(canManageChannels(_chatTeamId)){
+    html += `<button onclick="openCreateChannelModal()" style="flex-shrink:0;padding:6px 12px;border-radius:20px;border:1.5px dashed #1A8C6E66;background:none;color:#1A8C6E;font-size:12px;font-weight:700;cursor:pointer">+ Groupe</button>`;
+  }
+  html += `</div>`;
+  // Bandeau d'infos du groupe actif (membres + suppression)
+  const active = chatChannels.find(c => c.id === activeChatChannelId);
+  if(active){
+    const roleLabels = (active.roles||[]).map(r => TEAM_ROLES[r]?.label || r).join(', ');
+    const canDelete = active.created_by === currentUser?.id || myRolesForTeam(_chatTeamId).includes('manager');
+    html += `<div style="display:flex;justify-content:space-between;align-items:center;background:#2E86AB08;border:1px solid #2E86AB22;border-radius:8px;padding:6px 10px;margin-bottom:8px">
+      <span style="font-size:10px;color:#2E86AB">👥 ${escHtml(roleLabels)}</span>
+      ${canDelete?`<button onclick="deleteChatChannel(${active.id})" style="background:none;border:none;color:#C0392B;font-size:11px;font-weight:700;cursor:pointer">🗑️ Supprimer le groupe</button>`:''}
+    </div>`;
+  }
+  bar.innerHTML = html;
+}
+
+function switchChatChannel(id){
+  activeChatChannelId = id;
+  paintChatChannelBar();
+  const container = document.getElementById('chat-messages');
+  if(container) container.innerHTML = 'Chargement...';
+  loadChatMessages(_chatTeamId);
+}
+
+function openCreateChannelModal(){
+  const roleChecks = Object.entries(TEAM_ROLES).map(([k,v]) =>
+    `<label style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:#F5EEE8;border-radius:8px;margin-bottom:6px;cursor:pointer;font-size:13px">
+      <input type="checkbox" class="ch-role" value="${k}" ${k!=='joueur'?'checked':''}/> ${v.icon} ${v.label}
+    </label>`).join('');
+  const html = `<div class="modal-title">➕ NOUVEAU GROUPE</div>
+  <div class="field"><label>Nom du groupe</label><input class="input" id="ch-name" placeholder="Ex: Staff, Avants, Capitaines..."/></div>
+  <div class="field"><label>Qui peut voir et écrire dans ce groupe ?</label>${roleChecks}</div>
+  <div style="font-size:11px;color:#9A7A70;margin-bottom:12px">Exemple : pour un groupe staff, décoche « Joueur » et garde les autres rôles.</div>
+  <div style="display:flex;gap:8px">
+    <button class="btn-save" onclick="saveChatChannel()" style="background:#1A8C6E;color:#fff">CRÉER LE GROUPE</button>
+    <button class="btn-cancel" onclick="closeModal()">Annuler</button>
+  </div>`;
+  openModal(html);
+}
+
+async function saveChatChannel(){
+  const name = document.getElementById('ch-name')?.value.trim();
+  const roles = [...document.querySelectorAll('.ch-role:checked')].map(el => el.value);
+  if(!name){ showToast('Donne un nom au groupe', 'error'); return; }
+  if(!roles.length){ showToast('Choisis au moins un rôle', 'error'); return; }
+  const {data, error} = await sb.from('chat_channels').insert({team_id: _chatTeamId, name, roles, created_by: currentUser.id}).select().single();
+  if(error){ showToast('Erreur : '+error.message, 'error'); return; }
+  closeModal();
+  await loadChatChannels(_chatTeamId);
+  activeChatChannelId = data?.id || null;
+  paintChatChannelBar();
+  loadChatMessages(_chatTeamId);
+  showToast('Groupe « '+name+' » créé !', 'success');
+}
+
+async function deleteChatChannel(id){
+  if(!confirm('Supprimer ce groupe et tous ses messages ?')) return;
+  const {error} = await sb.from('chat_channels').delete().eq('id', id);
+  if(error){ showToast('Erreur : '+error.message, 'error'); return; }
+  activeChatChannelId = null;
+  await loadChatChannels(_chatTeamId);
+  paintChatChannelBar();
+  loadChatMessages(_chatTeamId);
+  showToast('Groupe supprimé', 'success');
+}
+
 async function loadChatMessages(teamId){
   const container = document.getElementById('chat-messages');
   if(!container) return;
-  const {data: msgs} = await sb.from('team_messages').select('*, profiles(nom, nom_famille)').eq('team_id', teamId).order('created_at', {ascending:true}).limit(50);
-  
-  // Deux requêtes séparées pour éviter le problème de jointure implicite
-  const {data: msgsRaw} = await sb.from('team_messages').select('*').eq('team_id', teamId).order('created_at', {ascending:true}).limit(50);
+  let q = sb.from('team_messages').select('*').eq('team_id', teamId);
+  q = activeChatChannelId ? q.eq('channel_id', activeChatChannelId) : q.is('channel_id', null);
+  const {data: msgsRaw} = await q.order('created_at', {ascending:true}).limit(50);
   if(!msgsRaw?.length){ container.innerHTML = '<div style="text-align:center;color:#9A7A70;font-size:12px;padding:20px">Aucun message pour l\'instant.<br>Soyez le premier à écrire !</div>'; return; }
-  
+
   const userIds = [...new Set(msgsRaw.map(m => m.user_id))];
   const {data: profilesData} = await sb.from('profiles').select('id, nom, nom_famille').in('id', userIds);
   const pMap = {}; (profilesData||[]).forEach(p => pMap[p.id] = p);
-  
+
   container.innerHTML = msgsRaw.map(m => {
     const isMe = m.user_id === currentUser.id;
     const p = pMap[m.user_id];
@@ -3269,15 +3377,15 @@ async function loadChatMessages(teamId){
 }
 
 async function sendChatMessage(){
-  const team = getManagerTeam() || myTeams[0];
-  if(!team) return;
+  const teamId = _chatTeamId || (getManagerTeam() || myTeams[0])?.id;
+  if(!teamId) return;
   const input = document.getElementById('chat-input');
   const message = input?.value.trim();
   if(!message) return;
-  const {error} = await sb.from('team_messages').insert({team_id: team.id, user_id: currentUser.id, message});
+  const {error} = await sb.from('team_messages').insert({team_id: teamId, user_id: currentUser.id, message, channel_id: activeChatChannelId});
   if(error){ showToast('Erreur : '+error.message, 'error'); return; }
   input.value = '';
-  loadChatMessages(team.id);
+  loadChatMessages(teamId);
 }
 
 function renderManagerProfil(){
@@ -3546,13 +3654,14 @@ function renderPrepaChat(){
   let html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
     '<span style="font-size:20px">💬</span>' +
     '<div style="font-size:15px;font-weight:800">Chat — ' + team.name + '</div></div>' +
+    '<div id="chat-channels-bar"></div>' +
     '<div id="chat-messages" style="min-height:300px;max-height:55vh;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
     '<div style="display:flex;gap:8px">' +
     '<input class="input" id="chat-input" placeholder="Votre message..." style="flex:1"/>' +
     '<button onclick="sendChatMessage()" style="background:#8B1A1A;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700">➤</button>' +
     '</div>';
   setTimeout(()=>{
-    loadChatMessages(team.id);
+    initChatView(team.id);
     setTimeout(()=>{
       const inp = document.getElementById('chat-input');
       if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter') sendChatMessage(); });
@@ -4455,13 +4564,14 @@ function renderChatJoueur(){
   let html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
     '<span style="font-size:20px">💬</span>' +
     '<div style="font-size:15px;font-weight:800">Chat — ' + team.name + '</div></div>' +
+    '<div id="chat-channels-bar"></div>' +
     '<div id="chat-messages" style="min-height:300px;max-height:55vh;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
     '<div style="display:flex;gap:8px">' +
     '<input class="input" id="chat-input" placeholder="Votre message..." style="flex:1"/>' +
     '<button onclick="sendChatMessage()" style="background:#2E86AB;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700">➤</button>' +
     '</div>';
   setTimeout(()=>{
-    loadChatMessages(team.id);
+    initChatView(team.id);
     setTimeout(()=>{
       const inp = document.getElementById('chat-input');
       if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter') sendChatMessage(); });
@@ -4875,6 +4985,28 @@ function renderMatchReportsBar(){
       <span style="color:#1A8C6E;font-size:16px">›</span>
     </div>`).join('')}
   </div>`;
+}
+
+function renderCoachChat(){
+  const team = getCoachTeam();
+  if(!team) return '<div class="card" style="text-align:center;padding:30px;color:#9A7A70">Aucune équipe associée.</div>';
+  let html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
+    '<span style="font-size:20px">💬</span>' +
+    '<div style="font-size:15px;font-weight:800">Chat — ' + escHtml(team.name) + '</div></div>' +
+    '<div id="chat-channels-bar"></div>' +
+    '<div id="chat-messages" style="min-height:300px;max-height:55vh;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
+    '<div style="display:flex;gap:8px">' +
+    '<input class="input" id="chat-input" placeholder="Votre message..." style="flex:1"/>' +
+    '<button onclick="sendChatMessage()" style="background:#1A8C6E;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700">➤</button>' +
+    '</div>';
+  setTimeout(()=>{
+    initChatView(team.id);
+    setTimeout(()=>{
+      const inp = document.getElementById('chat-input');
+      if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter') sendChatMessage(); });
+    }, 150);
+  }, 0);
+  return html;
 }
 
 function renderCoachProfil(){
