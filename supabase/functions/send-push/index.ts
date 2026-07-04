@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
       .eq('team_id', team_id)
       .eq('user_id', user.id)
       .single();
-    if (!membership || !['manager', 'prepa'].includes(membership.role)) {
+    if (!membership || !['manager', 'prepa', 'coach'].includes(membership.role)) {
       return json({ error: "Réservé au staff de l'équipe" }, 403);
     }
 

@@ -580,6 +580,14 @@ async function loadAllData(){
         teamAnnouncements = ann.data || [];
       } else { teamAnnouncements = []; }
     } catch(e) { teamAnnouncements = []; }
+    // Rapports de match publiés par le staff (entraîneurs/managers)
+    try {
+      if(myTeams.length){
+        const teamIds = myTeams.map(t => t.id);
+        const rpt = await sb.from('match_reports').select('*').in('team_id', teamIds).order('created_at', {ascending:false}).limit(10);
+        matchReports = rpt.data || [];
+      } else { matchReports = []; }
+    } catch(e) { matchReports = []; }
     sessions = (s.data || []).map(r => ({...r.data, id: r.id, date: r.date, type: r.type, heure: r.heure, duree: r.duree, ressenti: r.ressenti, difficulte: r.difficulte, notes: r.notes}));
     matches = m.data || [];
     chargesLog = (c.data || []).map(r => ({...r, sets: r.sets || []}));
@@ -1152,6 +1160,13 @@ function isPureManager(){
   return hasManagerRole && !hasJoueurRole;
 }
 
+function isPureCoach(){
+  const hasCoachRole = myTeams.some(t => t.myRole === 'coach');
+  const hasJoueurRole = myTeams.some(t => t.myRole === 'joueur');
+  // Manager/prépa/kiné passent avant : le rôle coach seul bascule sur l'espace entraîneur
+  return hasCoachRole && !hasJoueurRole && !isPureManager() && !isPurePrepa() && !isPureKine();
+}
+
 function render(){
   // Toujours fermer le menu Plus quand on change de vue
   const moreMenu = document.getElementById('more-menu');
@@ -1178,9 +1193,17 @@ function render(){
   if(isPureManager()){
     renderManagerNav();
     const el = document.getElementById('content');
-    const managerViews = {manager_home: renderManagerHome, manager_projet: renderManagerProjet, manager_debrief: renderManagerDebrief, manager_stats: renderManagerStats, manager_chat: renderManagerChat, manager_profil: renderManagerProfil};
+    const managerViews = {manager_home: renderManagerHome, manager_projet: renderManagerProjet, manager_debrief: renderManagerDebrief, manager_rapports: renderCoachReports, manager_stats: renderManagerStats, manager_chat: renderManagerChat, manager_profil: renderManagerProfil};
     if(!managerViews[currentView]) currentView = 'manager_home';
     if(el) el.innerHTML = (managerViews[currentView]||renderManagerHome)();
+    return;
+  }
+  if(isPureCoach()){
+    renderCoachNav();
+    const el = document.getElementById('content');
+    const coachViews = {coach_rapports: renderCoachReports, coach_profil: renderCoachProfil};
+    if(!coachViews[currentView]) currentView = 'coach_rapports';
+    if(el) el.innerHTML = (coachViews[currentView]||renderCoachReports)();
     return;
   }
   renderNav();
@@ -1211,6 +1234,20 @@ function renderPrepaNav(){
   if(!navEl) return;
   const prepaTabs=[{id:"prepa_home",icon:"🏠",label:"Joueurs"},{id:"prepa_seances",icon:"📋",label:"Séances"},{id:"prepa_exercices",icon:"💪",label:"Exercices"},{id:"prepa_tests",icon:"📊",label:"Tests"},{id:"prepa_chat",icon:"💬",label:"Chat"},{id:"prepa_profil",icon:"👤",label:"Profil"}];
   navEl.innerHTML=prepaTabs.map(t=>{
+    const isActive = currentView===t.id;
+    return `<button class="nav-btn ${isActive?"active":""}" onclick="setView('${t.id}')">
+      <span class="nav-icon">${t.icon}</span>${t.label}
+    </button>`;
+  }).join('');
+  let moreMenu = document.getElementById('moreMenu');
+  if(moreMenu) moreMenu.style.display = 'none';
+}
+
+function renderCoachNav(){
+  const navEl = document.getElementById('nav');
+  if(!navEl) return;
+  const coachTabs=[{id:"coach_rapports",icon:"📊",label:"Rapports"},{id:"coach_profil",icon:"👤",label:"Profil"}];
+  navEl.innerHTML=coachTabs.map(t=>{
     const isActive = currentView===t.id;
     return `<button class="nav-btn ${isActive?"active":""}" onclick="setView('${t.id}')">
       <span class="nav-icon">${t.icon}</span>${t.label}
@@ -1328,6 +1365,7 @@ function renderDashboard(){
   // Home épuré : annonces du staff, rappels, forme du jour, prochain match,
   // prochaines séances et séances récentes — pas de bloc profil ni compteurs.
   let html = renderTeamAnnouncementsBar();
+  html += renderMatchReportsBar();
   html += renderProposedSessionsInbox();
   html += renderNotifTutoCard();
   html += renderBilansReminder();
@@ -2547,6 +2585,16 @@ function renderManagerDebrief(){
   if(!team) return '';
   const {start, end} = getWeekRange();
   let html = `
+    <div class="card" style="border-color:#1A8C6E44;background:#1A8C6E08;cursor:pointer" onclick="setView('manager_rapports')">
+      <div style="display:flex;align-items:center;gap:12px">
+        <span style="font-size:24px">📊</span>
+        <div style="flex:1">
+          <div style="font-size:13px;font-weight:800;color:#1A8C6E">Rapports de match</div>
+          <div style="font-size:11px;color:#9A7A70;margin-top:2px">Stats mêlées/touches et analyses — visibles par les joueurs</div>
+        </div>
+        <span style="color:#1A8C6E;font-size:20px">›</span>
+      </div>
+    </div>
     <div class="sec-title">🧠 Débrief de la semaine</div>
     <div class="card" style="background:#2E86AB08;border-color:#2E86AB33">
       <div style="font-size:12px;color:#9A7A70;margin-bottom:10px">Semaine analysée : du <strong>${start}</strong> au <strong>${end}</strong></div>
@@ -4376,7 +4424,8 @@ const TEAM_ROLES = {
   joueur: {label:'Joueur', icon:'🏉', color:'#8B1A1A'},
   manager: {label:'Manager', icon:'📋', color:'#2E86AB'},
   prepa: {label:'Préparateur physique', icon:'🏋️', color:'#D4841A'},
-  kine: {label:'Kiné', icon:'🩺', color:'#C0185A'}
+  kine: {label:'Kiné', icon:'🩺', color:'#C0185A'},
+  coach: {label:'Entraîneur', icon:'🧢', color:'#1A8C6E'}
 };
 
 function isOwner(){
@@ -4546,6 +4595,14 @@ async function loadTeamInvites(teamId){
     container.innerHTML = '<div style="color:#C0392B;font-size:12px">Impossible de charger les invitations.</div>';
     return;
   }
+  // Créer les invitations manquantes (ex: rôle Entraîneur ajouté après la création de l'équipe)
+  for(const roleKey of Object.keys(TEAM_ROLES)){
+    if(!data.find(i => i.role === roleKey)){
+      const code = generateInviteCode();
+      const {data: created} = await sb.from('team_invites').insert({team_id: teamId, role: roleKey, invite_code: code}).select().single();
+      if(created) data.push(created);
+    }
+  }
   const baseUrl = window.location.origin + window.location.pathname;
   let html = '';
   Object.entries(TEAM_ROLES).forEach(([roleKey, roleInfo]) => {
@@ -4610,6 +4667,223 @@ async function joinTeamViaCode(code){
     }
   } catch(e) {}
   setView('equipe');
+}
+
+// ── RAPPORTS DE MATCH (espace entraîneur + manager) ──────────────────────────
+let matchReports = []; // rapports chargés pour les équipes de l'utilisateur
+
+function getCoachTeam(){
+  return myTeams.find(t => t.myRole === 'coach');
+}
+
+function getReportTeam(){
+  // L'entraîneur d'abord, sinon le manager (les deux peuvent saisir les stats)
+  return getCoachTeam() || getManagerTeam();
+}
+
+function escHtml(s){
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+}
+
+function pctStr(won, total){
+  if(!total) return null;
+  return Math.round((won/total)*1000)/10 + '%';
+}
+
+function renderCoachReports(){
+  const team = getReportTeam();
+  if(!team) return '<div class="card" style="text-align:center;padding:30px;color:#9A7A70">Aucune équipe associée.</div>';
+  const numIn = (id, ph) => `<input class="input" type="number" id="${id}" placeholder="${ph}" style="text-align:center;font-size:13px"/>`;
+  let html = `
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px">
+    <span style="font-size:22px">📊</span>
+    <div>
+      <div style="font-size:16px;font-weight:800">Rapports de match</div>
+      <div style="font-size:11px;color:#9A7A70">${team.name} — analyses et stats visibles par toute l'équipe</div>
+    </div>
+  </div>
+  <div class="card">
+    <div class="field"><label>Titre</label><input class="input" id="rpt-title" placeholder="Ex: Attendus 4C/Limoges, Stats mêlées vs Bagnères..."/></div>
+    <div class="field"><label>Analyse</label><textarea class="input" id="rpt-content" rows="6" placeholder="Ton analyse comme tu l'écrirais sur le groupe : points forts, axes de travail, consignes..."></textarea></div>
+
+    <details style="margin-bottom:12px">
+      <summary style="font-size:13px;font-weight:700;color:#8B1A1A;cursor:pointer;padding:8px 0">⚔️ Stats mêlées (optionnel)</summary>
+      <div style="background:#F5EEE8;border-radius:10px;padding:12px;margin-top:8px">
+        <div style="font-size:11px;font-weight:800;color:#8B1A1A;margin-bottom:6px">NOS MÊLÉES</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:6px;margin-bottom:10px">
+          ${numIn('rpt-mel-nt','Total')}${numIn('rpt-mel-ng','Gagnées')}${numIn('rpt-mel-nr','Refaites')}
+        </div>
+        <div style="font-size:11px;font-weight:800;color:#C0392B;margin-bottom:6px">MÊLÉES ADVERSES</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          ${numIn('rpt-mel-at','Total')}${numIn('rpt-mel-ar','Récupérées par nous')}
+        </div>
+      </div>
+    </details>
+
+    <details style="margin-bottom:12px">
+      <summary style="font-size:13px;font-weight:700;color:#2E86AB;cursor:pointer;padding:8px 0">🙌 Stats touches (optionnel)</summary>
+      <div style="background:#F5EEE8;border-radius:10px;padding:12px;margin-top:8px">
+        <div style="font-size:11px;font-weight:800;color:#2E86AB;margin-bottom:6px">NOS TOUCHES (OFFENSIVES)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:10px">
+          ${numIn('rpt-tou-ot','Total')}${numIn('rpt-tou-og','Gagnées')}
+        </div>
+        <div style="font-size:11px;font-weight:800;color:#C0392B;margin-bottom:6px">TOUCHES ADVERSES (DÉFENSIVES)</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          ${numIn('rpt-tou-dt','Total')}${numIn('rpt-tou-dr','Récupérées par nous')}
+        </div>
+      </div>
+    </details>
+
+    <button onclick="publishMatchReport()" style="width:100%;background:#1A8C6E;color:#fff;border:none;border-radius:12px;padding:14px;font-weight:800;font-size:14px;letter-spacing:0.5px">📊 PUBLIER LE RAPPORT</button>
+    <div style="font-size:11px;color:#9A7A70;text-align:center;margin-top:8px">Les joueurs le verront sur leur accueil et recevront une notification.</div>
+  </div>
+  <div class="sec-title">Rapports publiés</div>
+  <div id="team-reports-list">Chargement...</div>`;
+  setTimeout(()=>loadTeamReports(team.id), 0);
+  return html;
+}
+
+function collectReportStats(){
+  const v = id => { const n = parseFloat(document.getElementById(id)?.value); return isNaN(n) ? null : n; };
+  const melee = {nous_total:v('rpt-mel-nt'), nous_gagnees:v('rpt-mel-ng'), nous_refaites:v('rpt-mel-nr'), adv_total:v('rpt-mel-at'), adv_recup:v('rpt-mel-ar')};
+  const touche = {off_total:v('rpt-tou-ot'), off_gagnees:v('rpt-tou-og'), def_total:v('rpt-tou-dt'), def_recup:v('rpt-tou-dr')};
+  const hasMelee = Object.values(melee).some(x=>x!==null);
+  const hasTouche = Object.values(touche).some(x=>x!==null);
+  if(!hasMelee && !hasTouche) return null;
+  const stats = {};
+  if(hasMelee) stats.melee = melee;
+  if(hasTouche) stats.touche = touche;
+  return stats;
+}
+
+async function publishMatchReport(){
+  const team = getReportTeam();
+  if(!team) return;
+  const title = document.getElementById('rpt-title')?.value.trim();
+  const content = document.getElementById('rpt-content')?.value.trim();
+  if(!title){ showToast('Donne un titre au rapport', 'error'); return; }
+  if(!content && !collectReportStats()){ showToast('Écris une analyse ou remplis des stats', 'error'); return; }
+  const report = {
+    team_id: team.id,
+    created_by: currentUser.id,
+    author_name: userName(),
+    title, content,
+    stats: collectReportStats()
+  };
+  const {error} = await sb.from('match_reports').insert(report);
+  if(error){ showToast('Erreur : '+error.message, 'error'); return; }
+  showToast('Rapport publié à toute l\'équipe !', 'success');
+  // Notification push aux joueurs
+  try {
+    const {data:{session}} = await sb.auth.getSession();
+    await fetch(SUPABASE_URL + '/functions/v1/send-push', {
+      method: 'POST',
+      headers: {'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+(session?.access_token||SUPABASE_ANON)},
+      body: JSON.stringify({team_id: team.id, title: '📊 ' + (team.name||'Rugby Perf'), message: 'Nouveau rapport : ' + title})
+    });
+  } catch(e){ console.log('Push notification failed:', e); }
+  ['rpt-title','rpt-content','rpt-mel-nt','rpt-mel-ng','rpt-mel-nr','rpt-mel-at','rpt-mel-ar','rpt-tou-ot','rpt-tou-og','rpt-tou-dt','rpt-tou-dr'].forEach(id=>{
+    const el = document.getElementById(id); if(el) el.value='';
+  });
+  loadTeamReports(team.id);
+}
+
+async function loadTeamReports(teamId){
+  const container = document.getElementById('team-reports-list');
+  if(!container) return;
+  const {data, error} = await sb.from('match_reports').select('*').eq('team_id', teamId).order('created_at', {ascending:false}).limit(20);
+  if(error){ container.innerHTML = '<div style="color:#C0392B;font-size:12px">Erreur de chargement : '+escHtml(error.message)+'</div>'; return; }
+  if(!data?.length){ container.innerHTML = '<div class="card" style="text-align:center;padding:20px;color:#9A7A70;font-size:13px">Aucun rapport publié pour l\'instant.</div>'; return; }
+  matchReports = data;
+  container.innerHTML = data.map(r => `<div class="card" style="cursor:pointer" onclick="openMatchReport(${r.id})">
+    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+      <div style="flex:1">
+        <div style="font-size:14px;font-weight:800">📊 ${escHtml(r.title)}</div>
+        <div style="font-size:11px;color:#9A7A70;margin-top:2px">${escHtml(r.author_name||'Staff')} · ${fmt(r.created_at.split('T')[0])}${r.stats?' · contient des stats':''}</div>
+      </div>
+      ${r.created_by===currentUser?.id?`<button onclick="event.stopPropagation();deleteMatchReport(${r.id})" style="color:#C0392B;font-size:16px;background:none;border:none;padding:2px 6px">🗑️</button>`:''}
+    </div>
+  </div>`).join('');
+}
+
+async function deleteMatchReport(id){
+  if(!confirm('Supprimer ce rapport ?')) return;
+  const {error} = await sb.from('match_reports').delete().eq('id', id);
+  if(error){ showToast('Erreur suppression : '+error.message, 'error'); return; }
+  matchReports = matchReports.filter(r=>r.id!==id);
+  showToast('Rapport supprimé', 'success');
+  const team = getReportTeam();
+  if(team) loadTeamReports(team.id);
+  else render();
+}
+
+function statLine(label, won, total, extra){
+  const p = pctStr(won, total);
+  if(total===null && won===null) return '';
+  return `<div style="display:flex;justify-content:space-between;align-items:center;padding:5px 0;border-top:1px solid #E8D8D0">
+    <span style="font-size:12px;color:#1A0A0A">${label}</span>
+    <span style="font-size:12px;font-weight:800">${won??'—'}${total?' / '+total:''}${p?` <span style="color:${parseFloat(p)>=70?'#1A8C6E':parseFloat(p)>=40?'#D4841A':'#C0392B'}">(${p})</span>`:''}${extra||''}</span>
+  </div>`;
+}
+
+function renderReportStatsView(stats){
+  if(!stats) return '';
+  let html = '';
+  if(stats.melee){
+    const m = stats.melee;
+    html += `<div style="background:#8B1A1A08;border:1px solid #8B1A1A22;border-radius:10px;padding:10px 12px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:800;color:#8B1A1A;margin-bottom:4px">⚔️ MÊLÉES</div>
+      ${m.nous_total!==null?statLine('Nos mêlées gagnées', m.nous_gagnees, m.nous_total, m.nous_refaites?` <span style="color:#9A7A70;font-weight:400">· ${m.nous_refaites} refaites</span>`:''):''}
+      ${m.adv_total!==null?statLine('Récupérées sur leur intro', m.adv_recup, m.adv_total):''}
+    </div>`;
+  }
+  if(stats.touche){
+    const t = stats.touche;
+    html += `<div style="background:#2E86AB08;border:1px solid #2E86AB22;border-radius:10px;padding:10px 12px;margin-bottom:10px">
+      <div style="font-size:11px;font-weight:800;color:#2E86AB;margin-bottom:4px">🙌 TOUCHES</div>
+      ${t.off_total!==null?statLine('Touches offensives', t.off_gagnees, t.off_total):''}
+      ${t.def_total!==null?statLine('Récupérées en défense', t.def_recup, t.def_total):''}
+    </div>`;
+  }
+  return html;
+}
+
+function openMatchReport(id){
+  const r = matchReports.find(x=>x.id===id);
+  if(!r) return;
+  let html = `<div class="modal-title">📊 ${escHtml(r.title).toUpperCase()}</div>
+  <div style="font-size:11px;color:#9A7A70;margin-bottom:14px">${escHtml(r.author_name||'Staff')} · ${fmtFull(r.created_at.split('T')[0])}</div>
+  ${renderReportStatsView(r.stats)}
+  ${r.content?`<div style="font-size:13px;line-height:1.7;color:#1A0A0A;white-space:pre-wrap;background:#F5EEE8;border-radius:10px;padding:12px">${escHtml(r.content)}</div>`:''}
+  <button onclick="closeModal()" style="width:100%;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:10px;padding:12px;color:#9A7A70;font-weight:600;margin-top:14px">Fermer</button>`;
+  openModal(html);
+}
+
+function renderMatchReportsBar(){
+  // Côté joueur : rapports récents du staff sur l'accueil
+  if(!matchReports.length) return '';
+  const recent = matchReports.slice(0, 3);
+  return `<div style="background:#1A8C6E0C;border:1px solid #1A8C6E33;border-radius:12px;padding:12px 14px;margin-bottom:10px">
+    <div style="font-size:11px;font-weight:800;color:#1A8C6E;margin-bottom:4px">📊 Rapports du staff</div>
+    ${recent.map(r=>`<div onclick="openMatchReport(${r.id})" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:7px 0;border-top:1px solid #1A8C6E22;cursor:pointer">
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700;color:#1A0A0A">${escHtml(r.title)}</div>
+        <div style="font-size:10px;color:#9A7A70;margin-top:1px">${escHtml(r.author_name||'Staff')} · ${fmt(r.created_at.split('T')[0])}</div>
+      </div>
+      <span style="color:#1A8C6E;font-size:16px">›</span>
+    </div>`).join('')}
+  </div>`;
+}
+
+function renderCoachProfil(){
+  const team = getCoachTeam();
+  return `<div class="card">
+    <div style="font-size:14px;font-weight:800;margin-bottom:4px">${escHtml(currentUser?.email||'')}</div>
+    <div style="font-size:12px;color:#1A8C6E;font-weight:700">🧢 Entraîneur</div>
+  </div>
+  <div class="sec-title">Mon équipe</div>
+  ${team ? `<div class="card"><div style="font-size:14px;font-weight:700">${escHtml(team.name)}</div></div>` : '<div class="card" style="color:#9A7A70;font-size:13px">Aucune équipe associée.</div>'}
+  <button onclick="doLogout()" style="width:100%;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:10px;padding:13px;color:#C0392B;font-weight:700;font-size:14px;margin-top:16px">Déconnexion</button>`;
 }
 
 // ── ESPACE KINÉ / SANTÉ ───────────────────────────────────────────────────
