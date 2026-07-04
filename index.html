@@ -4865,7 +4865,48 @@ function renderEquipe(){
     setTimeout(()=>loadTeamInvites(activeTeam.id), 0);
   }
 
+  // Documents publiés par le staff (projet de jeu, analyses adverses)
+  html += `<div id="equipe-docs"></div>`;
+  const docsTeamId = activeTeamId || myTeams[0]?.id;
+  if(docsTeamId) setTimeout(()=>loadTeamDocsForPlayer(docsTeamId), 0);
+
   return html;
+}
+
+async function loadTeamDocsForPlayer(teamId){
+  const container = document.getElementById('equipe-docs');
+  if(!container || !teamId) return;
+  const [{data: docs}, {data: analyses}] = await Promise.all([
+    sb.from('team_documents').select('*').eq('team_id', teamId).order('created_at', {ascending:false}).limit(10),
+    sb.from('team_opponent_analysis').select('*').eq('team_id', teamId).order('created_at', {ascending:false}).limit(10)
+  ]);
+  let html = '';
+  if(docs?.length){
+    html += `<div class="sec-title">📄 Projet de jeu</div>`;
+    docs.forEach(d => {
+      html += `<div class="card">
+        <div style="font-size:13px;font-weight:700">${escHtml(d.titre||'Document')}</div>
+        <div style="font-size:11px;color:#9A7A70;margin-top:2px">${fmt(d.created_at.split('T')[0])}</div>
+        ${d.contenu?`<div style="font-size:12px;line-height:1.5;margin-top:6px;white-space:pre-wrap">${escHtml(d.contenu)}</div>`:''}
+        ${d.pdf_url?`<a href="${d.pdf_url}" target="_blank" style="font-size:12px;color:#2E86AB;margin-top:6px;display:inline-block;font-weight:700">📎 Voir le PDF</a>`:''}
+      </div>`;
+    });
+  }
+  if(analyses?.length){
+    html += `<div class="sec-title">⚔️ Analyses adverses</div>`;
+    analyses.forEach(a => {
+      html += `<div class="card">
+        <div style="font-size:13px;font-weight:700">vs ${escHtml(a.adversaire||'')}</div>
+        <div style="font-size:11px;color:#9A7A70;margin-top:2px">${fmt(a.created_at.split('T')[0])}</div>
+        ${a.notes?`<div style="font-size:12px;line-height:1.5;margin-top:6px;white-space:pre-wrap">${escHtml(a.notes)}</div>`:''}
+        <div style="margin-top:6px">
+          ${a.youtube_url?`<a href="${a.youtube_url}" target="_blank" style="font-size:12px;color:#C0392B;font-weight:700;margin-right:12px">▶️ Vidéo</a>`:''}
+          ${a.pdf_url?`<a href="${a.pdf_url}" target="_blank" style="font-size:12px;color:#2E86AB;font-weight:700">📎 PDF</a>`:''}
+        </div>
+      </div>`;
+    });
+  }
+  container.innerHTML = html;
 }
 
 async function createTeam(){
@@ -5612,6 +5653,7 @@ function openKineSessionForm(playerId, playerName){
     <div class="field"><label>Titre</label><input class="input" id="ks-titre" placeholder="Ex: Séance de rééducation genou"/></div>
     <div class="field"><label>Date</label><input class="input" type="date" id="ks-date" value="${today()}"/></div>
     <div class="field"><label>Description / consignes</label><textarea class="input" id="ks-description" rows="4" placeholder="Détaille les soins, étirements, exercices de récupération..."></textarea></div>
+    <div class="field"><label>PDF (ordonnance, programme — optionnel)</label><input class="input" type="file" id="ks-pdf" accept="application/pdf"/></div>
     <button class="btn-save" onclick="submitKineSession()" style="background:#C0185A;color:#fff">ENVOYER LA SÉANCE</button>`;
   openModal(html);
 }
@@ -5623,8 +5665,17 @@ async function submitKineSession(){
   const description = document.getElementById('ks-description')?.value || '';
   if(!titre || !date){ showToast('Titre et date obligatoires', 'error'); return; }
 
+  let pdf_url = null;
+  const ksFile = document.getElementById('ks-pdf')?.files?.[0];
+  if(ksFile){
+    const path = currentUser.id + '/' + Date.now() + '_' + ksFile.name;
+    const {error: upErr} = await sb.storage.from('session_pdfs').upload(path, ksFile);
+    if(upErr){ showToast('Erreur PDF : '+upErr.message, 'error'); return; }
+    pdf_url = sb.storage.from('session_pdfs').getPublicUrl(path).data.publicUrl;
+  }
+
   const row = {
-    team_id: team.id, created_by: currentUser.id, type: 'kine', titre, description, date,
+    team_id: team.id, created_by: currentUser.id, type: 'kine', titre, description, date, pdf_url,
     target_type: 'joueurs', target_ids: [_kineSessionTargetId]
   };
   const {error} = await sb.from('proposed_sessions').insert(row);
@@ -8181,6 +8232,21 @@ OneSignalDeferred.push(async function(OneSignal) {
 });
 
 boot();
+
+// Recharger les données quand l'appli revient au premier plan : annonces,
+// événements, séances proposées, rapports... publiés pendant l'absence.
+// Throttle 60s, et on ne touche à rien si un modal est ouvert ou une saisie en cours.
+let _lastAutoRefresh = 0;
+document.addEventListener('visibilitychange', async () => {
+  if(document.visibilityState !== 'visible' || !currentUser) return;
+  const nowT = Date.now();
+  if(nowT - _lastAutoRefresh < 60000) return;
+  const modalOpen = document.getElementById('modal')?.style.display === 'flex';
+  const typing = ['INPUT','TEXTAREA','SELECT'].includes(document.activeElement?.tagName);
+  if(modalOpen || typing) return;
+  _lastAutoRefresh = nowT;
+  try { await loadAllData(); render(); } catch(e){}
+});
 
 // Restaurer le chrono si l'appli revient au premier plan après avoir été mise en arrière-plan
 document.addEventListener('visibilitychange', () => {
