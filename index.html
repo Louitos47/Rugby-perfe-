@@ -237,6 +237,23 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // Edge Function d'envoi des notifications push (nom de la fonction déployée sur Supabase)
 const PUSH_FN_URL = SUPABASE_URL + '/functions/v1/rapid-action';
 
+// Envoie une notification push à tous les joueurs de l'équipe (via la fonction serveur).
+// Ne bloque jamais l'action principale : les erreurs sont seulement loguées.
+async function sendPushToTeam(teamId, title, message){
+  try {
+    const {data:{session}} = await sb.auth.getSession();
+    await fetch(PUSH_FN_URL, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'apikey': SUPABASE_ANON,
+        'Authorization': 'Bearer ' + (session?.access_token || SUPABASE_ANON)
+      },
+      body: JSON.stringify({team_id: teamId, title, message})
+    });
+  } catch(e){ console.log('Push notification failed:', e); }
+}
+
 // ── STATE ─────────────────────────────────────────────────────────────────────
 let currentUser = null;
 let userProfile = null;
@@ -1179,7 +1196,7 @@ function render(){
   if(isPureKine()){
     renderKineNav();
     const el = document.getElementById('content');
-    const kineViews = {kine_home: renderKineHome, kine_joueurs: renderKineSpace, kine_profil: renderKineProfil};
+    const kineViews = {kine_home: renderKineHome, kine_joueurs: renderKineSpace, kine_chat: renderKineChat, kine_profil: renderKineProfil};
     if(!kineViews[currentView]) currentView = 'kine_home';
     if(el) el.innerHTML = (kineViews[currentView]||renderKineHome)();
     return;
@@ -1220,7 +1237,7 @@ const moreTabs = [{id:"charges",icon:"🏋️",label:"Charges"},{id:"kine",icon:
 function renderKineNav(){
   const navEl = document.getElementById('nav');
   if(!navEl) return;
-  const kineTabs=[{id:"kine_home",icon:"🩺",label:"Accueil"},{id:"kine_joueurs",icon:"🏉",label:"Joueurs"},{id:"kine_profil",icon:"👤",label:"Profil"}];
+  const kineTabs=[{id:"kine_home",icon:"🩺",label:"Accueil"},{id:"kine_joueurs",icon:"🏉",label:"Joueurs"},{id:"kine_chat",icon:"💬",label:"Chat"},{id:"kine_profil",icon:"👤",label:"Profil"}];
   navEl.innerHTML=kineTabs.map(t=>{
     const isActive = currentView===t.id;
     return `<button class="nav-btn ${isActive?"active":""}" onclick="setView('${t.id}')">
@@ -2395,6 +2412,9 @@ async function saveManagerEvent(type){
   if(error){ showToast('Erreur : '+error.message, 'error'); return; }
   closeModal();
   showToast((type==='match'?'Match':'Entraînement') + " créé pour toute l'équipe !", 'success');
+  // Notification push aux joueurs
+  sendPushToTeam(team.id, '📅 ' + (team.name||'Rugby Perf'),
+    (type==='match'?'⚔️ Nouveau match : ':'🏉 Nouvel entraînement : ') + titre + ' — ' + fmtFull(date) + (heure?' à '+heure:''));
   loadManagerOverview(team.id);
   // Recharger les team_events côté joueur si c'est le même compte
   const {data: ev} = await sb.from('team_events').select('*').in('team_id', myTeams.map(t=>t.id)).gte('date', addDays(today(),-7));
@@ -2640,19 +2660,8 @@ async function publishAnnouncement(){
   if(error){ showToast('Erreur : '+error.message, 'error'); return; }
   document.getElementById('announcement-text').value = '';
   showToast('Annonce publiée à toute l\'équipe !', 'success');
-  // Notification push via l'Edge Function (la clé OneSignal reste côté serveur)
-  try {
-    const {data:{session}} = await sb.auth.getSession();
-    await fetch(PUSH_FN_URL, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'apikey': SUPABASE_ANON,
-        'Authorization': 'Bearer ' + (session?.access_token || SUPABASE_ANON)
-      },
-      body: JSON.stringify({team_id: team.id, title: '📣 ' + (team.name || 'Rugby Perf'), message})
-    });
-  } catch(e) { console.log('Push notification failed:', e); }
+  // Notification push à toute l'équipe
+  sendPushToTeam(team.id, '📣 ' + (team.name || 'Rugby Perf'), message);
   loadAnnouncements(team.id);
 }
 
@@ -3877,6 +3886,8 @@ async function submitPrepaSession(){
 
   closeModal(); render();
   showToast('Séance envoyée !', 'success');
+  // Notification push aux joueurs
+  sendPushToTeam(team.id, '💪 ' + (team.name||'Rugby Perf'), 'Nouvelle séance du préparateur : ' + titre + ' — ' + fmtFull(date));
 }
 
 // ── PROFIL ATHLÈTE ────────────────────────────────────────────────────────
@@ -4886,14 +4897,7 @@ async function publishMatchReport(){
   if(error){ showToast('Erreur : '+error.message, 'error'); return; }
   showToast('Rapport publié à toute l\'équipe !', 'success');
   // Notification push aux joueurs
-  try {
-    const {data:{session}} = await sb.auth.getSession();
-    await fetch(PUSH_FN_URL, {
-      method: 'POST',
-      headers: {'Content-Type':'application/json','apikey':SUPABASE_ANON,'Authorization':'Bearer '+(session?.access_token||SUPABASE_ANON)},
-      body: JSON.stringify({team_id: team.id, title: '📊 ' + (team.name||'Rugby Perf'), message: 'Nouveau rapport : ' + title})
-    });
-  } catch(e){ console.log('Push notification failed:', e); }
+  sendPushToTeam(team.id, '📊 ' + (team.name||'Rugby Perf'), 'Nouveau rapport : ' + title);
   ['rpt-title','rpt-content','rpt-mel-nt','rpt-mel-ng','rpt-mel-nr','rpt-mel-at','rpt-mel-ar','rpt-tou-ot','rpt-tou-og','rpt-tou-dt','rpt-tou-dr'].forEach(id=>{
     const el = document.getElementById(id); if(el) el.value='';
   });
@@ -4985,6 +4989,28 @@ function renderMatchReportsBar(){
       <span style="color:#1A8C6E;font-size:16px">›</span>
     </div>`).join('')}
   </div>`;
+}
+
+function renderKineChat(){
+  const team = myTeams.find(t => t.myRole === 'kine');
+  if(!team) return '<div class="card" style="text-align:center;padding:30px;color:#9A7A70">Aucune équipe associée.</div>';
+  let html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
+    '<span style="font-size:20px">💬</span>' +
+    '<div style="font-size:15px;font-weight:800">Chat — ' + escHtml(team.name) + '</div></div>' +
+    '<div id="chat-channels-bar"></div>' +
+    '<div id="chat-messages" style="min-height:300px;max-height:55vh;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
+    '<div style="display:flex;gap:8px">' +
+    '<input class="input" id="chat-input" placeholder="Votre message..." style="flex:1"/>' +
+    '<button onclick="sendChatMessage()" style="background:#C0185A;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700">➤</button>' +
+    '</div>';
+  setTimeout(()=>{
+    initChatView(team.id);
+    setTimeout(()=>{
+      const inp = document.getElementById('chat-input');
+      if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter') sendChatMessage(); });
+    }, 150);
+  }, 0);
+  return html;
 }
 
 function renderCoachChat(){
