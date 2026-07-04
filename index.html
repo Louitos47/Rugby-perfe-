@@ -2485,10 +2485,12 @@ async function loadManagerOverview(teamId){
       const isMatch = ev.type === 'match';
       html += `<div class="card" style="display:flex;align-items:center;gap:10px">
         <span style="font-size:18px">${isMatch?'⚔️':'🏉'}</span>
-        <div>
+        <div style="flex:1">
           <div style="font-size:13px;font-weight:700">${isMatch?'Match vs '+ev.titre:ev.titre}</div>
           <div style="font-size:11px;color:#9A7A70">${fmt(ev.date)}${ev.heure?' · '+ev.heure:''}</div>
         </div>
+        <button onclick="openEditTeamEvent(${ev.id},${teamId})" style="background:none;border:none;color:#2E86AB;font-size:15px;padding:4px 6px">✏️</button>
+        <button onclick="deleteTeamEvent(${ev.id},${teamId})" style="background:none;border:none;color:#C0392B;font-size:15px;padding:4px 6px">🗑️</button>
       </div>`;
     });
   }
@@ -2507,6 +2509,48 @@ async function loadManagerOverview(teamId){
   });
 
   container.innerHTML = html;
+}
+
+async function refreshTeamEventsCache(){
+  const {data: ev} = await sb.from('team_events').select('*').in('team_id', myTeams.map(t=>t.id)).gte('date', addDays(today(),-7));
+  teamEvents = ev || [];
+}
+
+async function openEditTeamEvent(eventId, teamId){
+  const {data: ev} = await sb.from('team_events').select('*').eq('id', eventId).single();
+  if(!ev){ showToast('Événement introuvable', 'error'); return; }
+  const isMatch = ev.type === 'match';
+  const html = `<div class="modal-title">✏️ MODIFIER ${isMatch?'LE MATCH':"L'ENTRAÎNEMENT"}</div>
+  <div class="field"><label>${isMatch?'Adversaire':'Titre'}</label><input class="input" id="eev-titre" value="${escHtml(ev.titre||'')}"/></div>
+  <div class="field"><label>Date</label><input class="input" type="date" id="eev-date" value="${ev.date}"/></div>
+  <div class="field"><label>Heure (optionnel)</label><input class="input" type="time" id="eev-heure" value="${ev.heure||''}"/></div>
+  <div style="display:flex;gap:8px">
+    <button class="btn-save" onclick="saveTeamEventEdit(${eventId},${teamId})" style="background:#2E86AB;color:#fff">ENREGISTRER</button>
+    <button class="btn-cancel" onclick="closeModal()">Annuler</button>
+  </div>`;
+  openModal(html);
+}
+
+async function saveTeamEventEdit(eventId, teamId){
+  const titre = document.getElementById('eev-titre')?.value.trim();
+  const date = document.getElementById('eev-date')?.value;
+  const heure = document.getElementById('eev-heure')?.value || '';
+  if(!titre || !date){ showToast('Titre et date obligatoires', 'error'); return; }
+  const {error} = await sb.from('team_events').update({titre, date, heure}).eq('id', eventId);
+  if(error){ showToast('Erreur : '+error.message, 'error'); return; }
+  closeModal();
+  showToast('Événement modifié ✓', 'success');
+  loadManagerOverview(teamId);
+  refreshTeamEventsCache();
+}
+
+async function deleteTeamEvent(eventId, teamId){
+  if(!confirm('Supprimer cet événement pour toute l\'équipe ?')) return;
+  const {error} = await sb.from('team_events').delete().eq('id', eventId);
+  if(error){ showToast('Erreur : '+error.message, 'error'); return; }
+  showToast('Événement supprimé', 'success');
+  loadManagerOverview(teamId);
+  refreshTeamEventsCache();
 }
 
 function renderManagerProjet(){
