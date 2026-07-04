@@ -2624,6 +2624,7 @@ async function submitManagerDoc(){
   if(error){ showToast('Erreur : '+error.message, 'error'); return; }
   closeModal();
   showToast('Document publié à l\'équipe', 'success');
+  sendPushToTeam(team.id, '📄 ' + (team.name||'Rugby Perf'), 'Nouveau document projet de jeu : ' + titre);
   loadManagerDocs(team.id);
 }
 
@@ -3060,6 +3061,7 @@ async function saveOpponentAnalysis(teamId){
   if(error){ showToast('Erreur : '+error.message, 'error'); return; }
   closeModal();
   showToast('Analyse publiée à l\'équipe !', 'success');
+  sendPushToTeam(teamId, '⚔️ ' + (myTeams.find(t=>t.id===teamId)?.name||'Rugby Perf'), 'Analyse adverse disponible : ' + adversaire);
   loadOpponentAnalysis(teamId);
 }
 
@@ -4044,8 +4046,30 @@ async function submitPrepaSession(){
 
   closeModal(); render();
   showToast('Séance envoyée !', 'success');
-  // Notification push aux joueurs
-  sendPushToTeam(team.id, '💪 ' + (team.name||'Rugby Perf'), 'Nouvelle séance du préparateur : ' + titre + ' — ' + fmtFull(date));
+  // Notification push — uniquement aux joueurs concernés par la séance
+  notifyProposedSessionTargets(team, _prepaTargetType, _prepaTargetSelection,
+    '💪 ' + (team.name||'Rugby Perf'), 'Nouvelle séance du préparateur : ' + titre + ' — ' + fmtFull(date));
+}
+
+// Résout les destinataires d'une séance proposée (joueurs précis ou par poste)
+// et leur envoie la notification. Sélection vide = toute l'équipe.
+async function notifyProposedSessionTargets(team, targetType, targetIds, title, message){
+  try {
+    if(!targetIds?.length){ sendPushToTeam(team.id, title, message); return; }
+    let ids = [];
+    if(targetType === 'joueurs'){
+      ids = targetIds;
+    } else if(targetType === 'postes'){
+      const {data: members} = await sb.from('team_members').select('user_id').eq('team_id', team.id).eq('role', 'joueur');
+      const memberIds = (members||[]).map(m => m.user_id);
+      if(memberIds.length){
+        const {data: profiles} = await sb.from('profiles').select('id, poste').in('id', memberIds);
+        ids = (profiles||[]).filter(p => targetIds.includes(p.poste)).map(p => p.id);
+      }
+    }
+    ids = [...new Set(ids)].filter(id => id && id !== currentUser.id);
+    if(ids.length) sendPushToTeam(team.id, title, message, ids);
+  } catch(e){ console.log('Push notification failed:', e); }
 }
 
 // ── PROFIL ATHLÈTE ────────────────────────────────────────────────────────
@@ -4691,6 +4715,10 @@ async function acceptProposedSession(id){
   incomingProposedSessions = incomingProposedSessions.filter(s => s.id !== id);
   render();
   showToast('Séance ajoutée à ton agenda !', 'success');
+  // Prévenir le membre du staff qui a envoyé la séance
+  if(sess.created_by && sess.created_by !== currentUser.id && sess.team_id){
+    sendPushToTeam(sess.team_id, '✅ Séance acceptée', userName() + ' a accepté ta séance « ' + (sess.titre||'') + ' »', sess.created_by);
+  }
 }
 
 async function ignoreProposedSession(id){
@@ -5321,6 +5349,14 @@ async function saveInjury(id){
     const {data, error} = await sb.from('injuries').insert(row).select().single();
     if(error){ showToast('Erreur : '+error.message, 'error'); return; }
     myInjuries = [data, ...myInjuries];
+    // Prévenir le staff médical (kiné + manager) des équipes du joueur
+    myTeams.filter(t => t.myRole === 'joueur').forEach(async t => {
+      try {
+        const {data: staff} = await sb.from('team_members').select('user_id').eq('team_id', t.id).in('role', ['kine','manager']);
+        const ids = [...new Set((staff||[]).map(s => s.user_id))].filter(uid => uid !== currentUser.id);
+        if(ids.length) sendPushToTeam(t.id, '🩹 ' + t.name, userName() + ' a déclaré une blessure : ' + type + (gravite ? ' (' + gravite + ')' : ''), ids);
+      } catch(e){}
+    });
   }
   closeModal(); render();
   showToast('Blessure enregistrée', 'success');
@@ -5595,6 +5631,8 @@ async function submitKineSession(){
   if(error){ showToast('Erreur envoi séance : '+error.message, 'error'); return; }
   closeModal();
   showToast(`Séance envoyée à ${_kineSessionTargetName}`, 'success');
+  // Notification push au joueur concerné uniquement
+  if(_kineSessionTargetId) sendPushToTeam(team.id, '🩺 ' + (team.name||'Rugby Perf'), 'Séance kiné : ' + titre + ' — ' + fmtFull(date), _kineSessionTargetId);
 }
 
 // ── FORME ──────────────────────────────────────────────────────────────────
