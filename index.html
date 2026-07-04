@@ -237,11 +237,14 @@ const sb = createClient(SUPABASE_URL, SUPABASE_ANON);
 // Edge Function d'envoi des notifications push (nom de la fonction déployée sur Supabase)
 const PUSH_FN_URL = SUPABASE_URL + '/functions/v1/rapid-action';
 
-// Envoie une notification push à tous les joueurs de l'équipe (via la fonction serveur).
+// Envoie une notification push (via la fonction serveur).
+// Sans recipientId : toute l'équipe. Avec recipientId : cette personne uniquement.
 // Ne bloque jamais l'action principale : les erreurs sont seulement loguées.
-async function sendPushToTeam(teamId, title, message){
+async function sendPushToTeam(teamId, title, message, recipientId){
   try {
     const {data:{session}} = await sb.auth.getSession();
+    const body = {team_id: teamId, title, message};
+    if(recipientId) body.recipient_id = recipientId;
     await fetch(PUSH_FN_URL, {
       method: 'POST',
       headers: {
@@ -249,7 +252,7 @@ async function sendPushToTeam(teamId, title, message){
         'apikey': SUPABASE_ANON,
         'Authorization': 'Bearer ' + (session?.access_token || SUPABASE_ANON)
       },
-      body: JSON.stringify({team_id: teamId, title, message})
+      body: JSON.stringify(body)
     });
   } catch(e){ console.log('Push notification failed:', e); }
 }
@@ -3253,10 +3256,13 @@ function renderManagerChat(){
   return html;
 }
 
-// ── GROUPES DE DISCUSSION ─────────────────────────────────────────────────────
+// ── GROUPES DE DISCUSSION + MESSAGES PRIVÉS ───────────────────────────────────
 let chatChannels = [];        // groupes du chat de l'équipe affichée
 let activeChatChannelId = null; // null = canal général « Équipe »
+let activeDmUserId = null;    // conversation privée ouverte (user_id) ou null
+let _pendingDmUserId = null;  // DM à ouvrir dès que le chat est prêt (navigation inter-onglets)
 let _chatTeamId = null;       // équipe dont le chat est ouvert
+let _teamMembersCache = {};   // {user_id: {name, role}} pour afficher les noms
 
 function myRolesForTeam(teamId){
   return myTeams.filter(t => t.id === teamId).map(t => t.myRole);
@@ -3270,9 +3276,73 @@ function canManageChannels(teamId){
 async function initChatView(teamId){
   _chatTeamId = teamId;
   activeChatChannelId = null;
+  activeDmUserId = null;
   await loadChatChannels(teamId);
+  if(_pendingDmUserId){
+    const uid = _pendingDmUserId; _pendingDmUserId = null;
+    return startDm(uid);
+  }
   paintChatChannelBar();
   loadChatMessages(teamId);
+}
+
+async function loadTeamMembers(teamId){
+  const {data: members} = await sb.from('team_members').select('user_id, role').eq('team_id', teamId);
+  const ids = [...new Set((members||[]).map(m => m.user_id))];
+  if(!ids.length) return [];
+  const {data: profiles} = await sb.from('profiles').select('id, nom, nom_famille, poste').in('id', ids);
+  const pMap = {}; (profiles||[]).forEach(p => pMap[p.id] = p);
+  const seen = new Set();
+  const list = [];
+  (members||[]).forEach(m => {
+    if(m.user_id === currentUser?.id || seen.has(m.user_id)) return; // un compte peut cumuler des rôles
+    seen.add(m.user_id);
+    const p = pMap[m.user_id] || {};
+    const name = ((p.nom||'')+' '+(p.nom_famille||'')).trim() || 'Membre';
+    list.push({id: m.user_id, name, role: m.role, poste: p.poste});
+    _teamMembersCache[m.user_id] = {name, role: m.role};
+  });
+  return list.sort((a,b) => a.name.localeCompare(b.name));
+}
+
+async function openDmPicker(){
+  const list = await loadTeamMembers(_chatTeamId);
+  if(!list.length){ showToast('Aucun autre membre dans l\'équipe', 'error'); return; }
+  const html = `<div class="modal-title">✉️ MESSAGE PRIVÉ</div>
+  <div style="font-size:12px;color:#9A7A70;margin-bottom:10px">Choisis la personne à qui écrire — la conversation n'est visible que par vous deux.</div>
+  <div style="max-height:50vh;overflow-y:auto">
+  ${list.map(m => {
+    const r = TEAM_ROLES[m.role] || TEAM_ROLES.joueur;
+    return `<div onclick="startDm('${m.id}')" style="display:flex;align-items:center;gap:10px;padding:10px 6px;border-bottom:1px solid #F5EEE8;cursor:pointer">
+      <span style="font-size:18px">${r.icon}</span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700">${escHtml(m.name)}</div>
+        <div style="font-size:11px;color:${r.color}">${r.label}${m.poste?' · '+escHtml(m.poste):''}</div>
+      </div>
+      <span style="color:#9A7A70">›</span>
+    </div>`;
+  }).join('')}
+  </div>
+  <button onclick="closeModal()" style="width:100%;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:10px;padding:12px;color:#9A7A70;font-weight:600;margin-top:12px">Annuler</button>`;
+  openModal(html);
+}
+
+async function startDm(userId){
+  closeModal();
+  activeDmUserId = userId;
+  activeChatChannelId = null;
+  if(!_teamMembersCache[userId]) await loadTeamMembers(_chatTeamId);
+  paintChatChannelBar();
+  const container = document.getElementById('chat-messages');
+  if(container) container.innerHTML = 'Chargement...';
+  loadChatMessages(_chatTeamId);
+}
+
+// Ouvre une conversation privée depuis un autre onglet (ex: fiche joueur du kiné)
+function openDmWith(userId, chatView){
+  closeModal();
+  _pendingDmUserId = userId;
+  setView(chatView || 'chat_joueur');
 }
 
 async function loadChatChannels(teamId){
@@ -3290,14 +3360,21 @@ function paintChatChannelBar(){
   const chip = (active, label, onclick) =>
     `<button onclick="${onclick}" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:1.5px solid ${active?'#2E86AB':'#E8D8D0'};background:${active?'#2E86AB18':'#FFFFFF'};color:${active?'#2E86AB':'#9A7A70'};font-size:12px;font-weight:700;cursor:pointer">${label}</button>`;
   let html = `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px;align-items:center">`;
-  html += chip(activeChatChannelId===null, '💬 Équipe', 'switchChatChannel(null)');
+  html += chip(activeChatChannelId===null && !activeDmUserId, '💬 Équipe', 'switchChatChannel(null)');
   chatChannels.forEach(c => {
     html += chip(activeChatChannelId===c.id, escHtml(c.name), `switchChatChannel(${c.id})`);
   });
+  const dmName = activeDmUserId && _teamMembersCache[activeDmUserId] ? ' · '+escHtml(_teamMembersCache[activeDmUserId].name.split(' ')[0]) : '';
+  html += chip(!!activeDmUserId, '✉️ Privé'+dmName, 'openDmPicker()');
   if(canManageChannels(_chatTeamId)){
     html += `<button onclick="openCreateChannelModal()" style="flex-shrink:0;padding:6px 12px;border-radius:20px;border:1.5px dashed #1A8C6E66;background:none;color:#1A8C6E;font-size:12px;font-weight:700;cursor:pointer">+ Groupe</button>`;
   }
   html += `</div>`;
+  // Bandeau conversation privée
+  if(activeDmUserId){
+    const m = _teamMembersCache[activeDmUserId];
+    html += `<div style="background:#7B2D8B08;border:1px solid #7B2D8B33;border-radius:8px;padding:6px 10px;margin-bottom:8px;font-size:10px;color:#7B2D8B">✉️ Conversation privée avec <strong>${escHtml(m?.name||'…')}</strong> — visible uniquement par vous deux</div>`;
+  }
   // Bandeau d'infos du groupe actif (membres + suppression)
   const active = chatChannels.find(c => c.id === activeChatChannelId);
   if(active){
@@ -3313,6 +3390,7 @@ function paintChatChannelBar(){
 
 function switchChatChannel(id){
   activeChatChannelId = id;
+  activeDmUserId = null;
   paintChatChannelBar();
   const container = document.getElementById('chat-messages');
   if(container) container.innerHTML = 'Chargement...';
@@ -3364,9 +3442,19 @@ async function deleteChatChannel(id){
 async function loadChatMessages(teamId){
   const container = document.getElementById('chat-messages');
   if(!container) return;
-  let q = sb.from('team_messages').select('*').eq('team_id', teamId);
-  q = activeChatChannelId ? q.eq('channel_id', activeChatChannelId) : q.is('channel_id', null);
-  const {data: msgsRaw} = await q.order('created_at', {ascending:true}).limit(50);
+  let msgsRaw;
+  if(activeDmUserId){
+    const me = currentUser.id;
+    const {data} = await sb.from('direct_messages').select('*')
+      .or(`and(sender_id.eq.${me},recipient_id.eq.${activeDmUserId}),and(sender_id.eq.${activeDmUserId},recipient_id.eq.${me})`)
+      .order('created_at', {ascending:true}).limit(50);
+    msgsRaw = (data||[]).map(m => ({...m, user_id: m.sender_id}));
+  } else {
+    let q = sb.from('team_messages').select('*').eq('team_id', teamId);
+    q = activeChatChannelId ? q.eq('channel_id', activeChatChannelId) : q.is('channel_id', null);
+    const {data} = await q.order('created_at', {ascending:true}).limit(50);
+    msgsRaw = data;
+  }
   if(!msgsRaw?.length){ container.innerHTML = '<div style="text-align:center;color:#9A7A70;font-size:12px;padding:20px">Aucun message pour l\'instant.<br>Soyez le premier à écrire !</div>'; return; }
 
   const userIds = [...new Set(msgsRaw.map(m => m.user_id))];
@@ -3391,6 +3479,15 @@ async function sendChatMessage(){
   const input = document.getElementById('chat-input');
   const message = input?.value.trim();
   if(!message) return;
+  if(activeDmUserId){
+    // Message privé : table dédiée + notification au destinataire uniquement
+    const {error} = await sb.from('direct_messages').insert({team_id: teamId, sender_id: currentUser.id, recipient_id: activeDmUserId, message});
+    if(error){ showToast('Erreur : '+error.message, 'error'); return; }
+    input.value = '';
+    sendPushToTeam(teamId, '✉️ ' + userName(), message.slice(0,120), activeDmUserId);
+    loadChatMessages(teamId);
+    return;
+  }
   const {error} = await sb.from('team_messages').insert({team_id: teamId, user_id: currentUser.id, message, channel_id: activeChatChannelId});
   if(error){ showToast('Erreur : '+error.message, 'error'); return; }
   input.value = '';
@@ -4785,6 +4882,7 @@ async function joinTeamViaCode(code){
   // Taguer le joueur dans OneSignal avec l'ID de son équipe
   try {
     if(window.OneSignal) {
+      await OneSignal.login(String(currentUser.id));
       await OneSignal.User.addTag('team_id', String(invite.team_id));
       await OneSignal.User.addTag('role', invite.role);
     }
@@ -5332,7 +5430,8 @@ async function openKinePlayerDetail(playerId, playerName, teamId){
   const html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div style="font-size:15px;font-weight:800">🩺 ${playerName}</div><span onclick="closeModal()" style="font-size:22px;color:#9A7A70;cursor:pointer">×</span></div>
     <div style="display:flex;gap:8px;margin-bottom:14px">
       <button onclick="toggleKineApte('${playerId}',${teamId},${!isApte})" style="flex:1;background:${isApte?'#C0392B18':'#1A8C6E18'};border:1px solid ${isApte?'#C0392B44':'#1A8C6E44'};border-radius:8px;padding:9px;font-weight:700;font-size:12px;color:${isApte?'#C0392B':'#1A8C6E'}">${isApte?'⚠️ Non apte':'✓ Apte'}</button>
-      <button onclick="openKineNoteForm('${playerId}','${playerName}',${teamId})" style="flex:1;background:#2E86AB18;border:1px solid #2E86AB44;border-radius:8px;padding:9px;font-weight:700;font-size:12px;color:#2E86AB">📝 Note</button>
+      <button onclick="openKineNotesModal('${playerId}','${playerName.replace(/'/g,"\\'")}',${teamId})" style="flex:1;background:#2E86AB18;border:1px solid #2E86AB44;border-radius:8px;padding:9px;font-weight:700;font-size:12px;color:#2E86AB">📝 Note</button>
+      <button onclick="openDmWith('${playerId}','kine_chat')" style="flex:1;background:#7B2D8B18;border:1px solid #7B2D8B44;border-radius:8px;padding:9px;font-weight:700;font-size:12px;color:#7B2D8B">✉️ Message</button>
     </div>
     <div class="sec-title">Blessures</div>${injHtml}
     <div class="sec-title" style="margin-top:12px">Notes récentes</div>
@@ -7712,10 +7811,14 @@ async function initApp(){
   } else {
     // Taguer OneSignal avec l'équipe active si déjà membre
     try {
-      if(window.OneSignal && myTeams.length) {
-        const activeTeam = myTeams[0];
-        await OneSignal.User.addTag('team_id', String(activeTeam.id));
-        await OneSignal.User.addTag('role', activeTeam.myRole || 'joueur');
+      if(window.OneSignal) {
+        // Identifier l'utilisateur pour les notifications privées ciblées
+        await OneSignal.login(String(currentUser.id));
+        if(myTeams.length){
+          const activeTeam = myTeams[0];
+          await OneSignal.User.addTag('team_id', String(activeTeam.id));
+          await OneSignal.User.addTag('role', activeTeam.myRole || 'joueur');
+        }
       }
     } catch(e) {}
     renderMainApp();
