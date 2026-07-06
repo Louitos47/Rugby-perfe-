@@ -1239,7 +1239,7 @@ function render(){
   if(el) el.innerHTML = (views[currentView]||renderDashboard)();
 }
 
-const moreTabs = [{id:"charges",icon:"🏋️",label:"Charges"},{id:"kine",icon:"🩺",label:"Kiné"},{id:"planning",icon:"📅",label:"Matchs à venir"},{id:"calendar",icon:"🗓️",label:"Calendrier"},{id:"equipe",icon:"🤝",label:"Équipe"},{id:"chat_joueur",icon:"💬",label:"Chat équipe"}];
+const moreTabs = [{id:"athlete",icon:"🎯",label:"Tests & objectifs"},{id:"charges",icon:"🏋️",label:"Charges"},{id:"kine",icon:"🩺",label:"Kiné"},{id:"planning",icon:"📅",label:"Matchs à venir"},{id:"calendar",icon:"🗓️",label:"Calendrier"},{id:"equipe",icon:"🤝",label:"Équipe"},{id:"chat_joueur",icon:"💬",label:"Chat équipe"}];
 
 function renderKineNav(){
   const navEl = document.getElementById('nav');
@@ -6045,6 +6045,14 @@ function renderMoi(){
           <div style="font-size:16px;font-weight:800;color:#2E86AB">${val}${key.includes('sprint')||key==='bronco_temps'?'s':key==='detente'?'cm':'kg'}</div>
         </div>`).join('')}
       </div>
+      <button onclick="setView('athlete')" style="width:100%;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:8px;padding:8px;font-size:12px;font-weight:700;color:#8B1A1A;margin-top:10px">🎯 Voir mes tests & ajouter un nouveau</button>
+    </div>`;
+  } else {
+    html += `<div class="card" style="margin-top:10px;text-align:center;padding:20px">
+      <div style="font-size:28px">🎯</div>
+      <div style="font-size:13px;font-weight:700;margin-top:8px">Tests physiques</div>
+      <div style="font-size:12px;color:#9A7A70;margin-top:4px">Bronco, Squat, Développé couché, Soulevé de terre</div>
+      <button onclick="setView('athlete')" style="margin-top:12px;background:#8B1A1A;color:#fff;border:none;border-radius:8px;padding:8px 16px;font-size:12px;font-weight:700">Renseigner un test</button>
     </div>`;
   }
 
