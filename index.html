@@ -5566,8 +5566,12 @@ async function openKinePlayerDetail(playerId, playerName, teamId){
   const isApte = aptRow?.apte_au_jeu !== false;
   const injHtml = (injuries||[]).length ? injuries.map(inj => `<div style="background:#F5EEE8;border-radius:8px;padding:8px 10px;margin-bottom:6px"><div style="font-size:12px;font-weight:700">${inj.zone||''} ${inj.cote?'· '+inj.cote:''}</div><div style="font-size:11px;color:#9A7A70">${fmt(inj.date_debut||'')} · ${inj.statut||''}</div>${inj.description?`<div style="font-size:11px;font-style:italic">${inj.description}</div>`:''}</div>`).join('') : '<div style="font-size:12px;color:#9A7A70">Aucune blessure.</div>';
   const html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px"><div style="font-size:15px;font-weight:800">🩺 ${playerName}</div><span onclick="closeModal()" style="font-size:22px;color:#9A7A70;cursor:pointer">×</span></div>
+    <div style="display:flex;gap:8px;margin-bottom:8px">
+      <button onclick="toggleKineApte('${playerId}',${teamId},${!isApte})" style="flex:1;background:${isApte?'#C0392B18':'#1A8C6E18'};border:1px solid ${isApte?'#C0392B44':'#1A8C6E44'};border-radius:8px;padding:9px;font-weight:700;font-size:12px;color:${isApte?'#C0392B':'#1A8C6E'}">${isApte?'⚠️ Déclarer non apte':'✓ Déclarer apte'}</button>
+      <button onclick="openKineInjuryForm('${playerId}','${playerName.replace(/'/g,"\\'")}',${teamId})" style="flex:1;background:#C0392B18;border:1px solid #C0392B44;border-radius:8px;padding:9px;font-weight:700;font-size:12px;color:#C0392B">🩹 Blessure</button>
+    </div>
     <div style="display:flex;gap:8px;margin-bottom:14px">
-      <button onclick="toggleKineApte('${playerId}',${teamId},${!isApte})" style="flex:1;background:${isApte?'#C0392B18':'#1A8C6E18'};border:1px solid ${isApte?'#C0392B44':'#1A8C6E44'};border-radius:8px;padding:9px;font-weight:700;font-size:12px;color:${isApte?'#C0392B':'#1A8C6E'}">${isApte?'⚠️ Non apte':'✓ Apte'}</button>
+      <button onclick="openKineSessionForm('${playerId}','${playerName.replace(/'/g,"\\'")}')" style="flex:1;background:#C0185A18;border:1px solid #C0185A44;border-radius:8px;padding:9px;font-weight:700;font-size:12px;color:#C0185A">📋 Séance</button>
       <button onclick="openKineNotesModal('${playerId}','${playerName.replace(/'/g,"\\'")}',${teamId})" style="flex:1;background:#2E86AB18;border:1px solid #2E86AB44;border-radius:8px;padding:9px;font-weight:700;font-size:12px;color:#2E86AB">📝 Note</button>
       <button onclick="openDmWith('${playerId}','kine_chat')" style="flex:1;background:#7B2D8B18;border:1px solid #7B2D8B44;border-radius:8px;padding:9px;font-weight:700;font-size:12px;color:#7B2D8B">✉️ Message</button>
     </div>
@@ -5578,8 +5582,57 @@ async function openKinePlayerDetail(playerId, playerName, teamId){
 }
 
 async function toggleKineApte(playerId, teamId, newApte){
-  await sb.from('team_members').update({apte_au_jeu: newApte}).eq('team_id', teamId).eq('user_id', playerId);
-  closeModal(); showToast(newApte ? 'Joueur déclaré apte ✓' : 'Joueur non apte', 'success');
+  const {data, error} = await sb.from('team_members').update({apte_au_jeu: newApte}).eq('team_id', teamId).eq('user_id', playerId).select();
+  if(error){ showToast('Erreur : '+error.message, 'error'); return; }
+  if(!data?.length){ showToast('Permission refusée — exécute le SQL "pouvoirs kiné" dans Supabase', 'error'); return; }
+  closeModal(); showToast(newApte ? 'Joueur déclaré apte ✓' : 'Joueur déclaré non apte', 'success');
+  // Prévenir le joueur de son changement de statut
+  const t = myTeams.find(x => x.id === teamId);
+  sendPushToTeam(teamId, '🩺 ' + (t?.name||'Rugby Perf'), newApte ? 'Le kiné t\'a déclaré apte au jeu ✓' : 'Le kiné t\'a déclaré non apte au jeu ⚠️', playerId);
+  loadKineTeamData(teamId);
+}
+
+function openKineInjuryForm(playerId, playerName, teamId){
+  const html = `<div style="display:flex;justify-content:space-between;align-items:center">
+    <div class="modal-title" style="margin-bottom:0">🩹 BLESSURE — ${playerName}</div>
+    <span onclick="closeModal()" style="font-size:22px;color:#9A7A70;cursor:pointer;padding:4px 8px">×</span>
+  </div>
+  <div style="font-size:11px;color:#9A7A70;margin-bottom:12px;line-height:1.5">Déclare une blessure au dossier du joueur — il sera notifié.</div>
+  <div class="field"><label>Type / zone</label><input class="input" id="ki-type" placeholder="Ex: Entorse cheville droite"/></div>
+  <div class="grid2">
+    <div class="field"><label>Gravité</label><select class="input" id="ki-gravite">
+      ${Object.entries(GRAVITE_INFO).map(([k,v])=>`<option value="${k}">${v.icon} ${v.label}</option>`).join('')}
+    </select></div>
+    <div class="field"><label>Date de début</label><input class="input" type="date" id="ki-date" value="${today()}"/></div>
+  </div>
+  <div class="grid2">
+    <div class="field"><label>Indisponibilité estimée (jours)</label><input class="input" type="number" id="ki-duree" placeholder="Ex: 21"/></div>
+    <div class="field"><label>Statut</label><select class="input" id="ki-statut">
+      ${Object.entries(STATUT_INFO).map(([k,v])=>`<option value="${k}">${v.label}</option>`).join('')}
+    </select></div>
+  </div>
+  <div class="field"><label>Notes (optionnel)</label><textarea class="input" id="ki-notes" rows="3" placeholder="Diagnostic, protocole de soins..."></textarea></div>
+  <button class="btn-save" onclick="submitKineInjury('${playerId}','${playerName.replace(/'/g,"\\'")}',${teamId})" style="background:#C0392B;color:#fff">DÉCLARER LA BLESSURE</button>`;
+  openModal(html);
+}
+
+async function submitKineInjury(playerId, playerName, teamId){
+  const type = document.getElementById('ki-type')?.value.trim();
+  const gravite = document.getElementById('ki-gravite')?.value;
+  const date_debut = document.getElementById('ki-date')?.value;
+  const duree_estimee_jours = parseInt(document.getElementById('ki-duree')?.value) || null;
+  const statut = document.getElementById('ki-statut')?.value || 'en_cours';
+  const notes = document.getElementById('ki-notes')?.value || '';
+  if(!type || !date_debut){ showToast('Type et date obligatoires', 'error'); return; }
+  const row = {user_id: playerId, type, gravite, date_debut, duree_estimee_jours, statut, notes};
+  if(statut === 'gueri') row.date_fin = today();
+  const {error} = await sb.from('injuries').insert(row);
+  if(error){ showToast('Erreur : '+error.message+' — exécute le SQL "pouvoirs kiné" si permission refusée', 'error'); return; }
+  closeModal();
+  showToast('Blessure déclarée pour '+playerName, 'success');
+  // Prévenir le joueur
+  const t = myTeams.find(x => x.id === teamId);
+  sendPushToTeam(teamId, '🩺 ' + (t?.name||'Rugby Perf'), 'Le kiné a ajouté une blessure à ton dossier : ' + type, playerId);
   loadKineTeamData(teamId);
 }
 
