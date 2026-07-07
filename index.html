@@ -1225,11 +1225,13 @@ function render(){
     return;
   }
   if(isPureCoach()){
-    renderCoachNav();
+    // L'entraîneur utilise la même interface que le manager
+    // (les liens d'invitation sont masqués dans le profil)
+    renderManagerNav();
     const el = document.getElementById('content');
-    const coachViews = {coach_rapports: renderCoachReports, coach_chat: renderCoachChat, coach_profil: renderCoachProfil};
-    if(!coachViews[currentView]) currentView = 'coach_rapports';
-    if(el) el.innerHTML = (coachViews[currentView]||renderCoachReports)();
+    const managerViews = {manager_home: renderManagerHome, manager_projet: renderManagerProjet, manager_debrief: renderManagerDebrief, manager_rapports: renderCoachReports, manager_stats: renderManagerStats, manager_chat: renderManagerChat, manager_profil: renderManagerProfil};
+    if(!managerViews[currentView]) currentView = 'manager_home';
+    if(el) el.innerHTML = (managerViews[currentView]||renderManagerHome)();
     return;
   }
   renderNav();
@@ -1260,20 +1262,6 @@ function renderPrepaNav(){
   if(!navEl) return;
   const prepaTabs=[{id:"prepa_home",icon:"🏠",label:"Joueurs"},{id:"prepa_seances",icon:"📋",label:"Séances"},{id:"prepa_exercices",icon:"💪",label:"Exercices"},{id:"prepa_tests",icon:"📊",label:"Tests"},{id:"prepa_chat",icon:"💬",label:"Chat"},{id:"prepa_profil",icon:"👤",label:"Profil"}];
   navEl.innerHTML=prepaTabs.map(t=>{
-    const isActive = currentView===t.id;
-    return `<button class="nav-btn ${isActive?"active":""}" onclick="setView('${t.id}')">
-      <span class="nav-icon">${t.icon}</span>${t.label}
-    </button>`;
-  }).join('');
-  let moreMenu = document.getElementById('moreMenu');
-  if(moreMenu) moreMenu.style.display = 'none';
-}
-
-function renderCoachNav(){
-  const navEl = document.getElementById('nav');
-  if(!navEl) return;
-  const coachTabs=[{id:"coach_rapports",icon:"📊",label:"Rapports"},{id:"coach_chat",icon:"💬",label:"Chat"},{id:"coach_profil",icon:"👤",label:"Profil"}];
-  navEl.innerHTML=coachTabs.map(t=>{
     const isActive = currentView===t.id;
     return `<button class="nav-btn ${isActive?"active":""}" onclick="setView('${t.id}')">
       <span class="nav-icon">${t.icon}</span>${t.label}
@@ -2366,7 +2354,9 @@ async function deletePrepaTeamExercice(id){
 }
 
 function getManagerTeam(){
-  return myTeams.find(t => t.myRole === 'manager');
+  // L'entraîneur partage l'interface manager : on renvoie son équipe s'il
+  // n'a pas de rôle manager (seuls les liens d'invitation lui sont masqués)
+  return myTeams.find(t => t.myRole === 'manager') || myTeams.find(t => t.myRole === 'coach');
 }
 
 function renderManagerHome(){
@@ -3559,14 +3549,16 @@ async function sendChatMessage(){
 
 function renderManagerProfil(){
   const team = getManagerTeam();
+  const isRealManager = myTeams.some(t => t.myRole === 'manager');
   let html = `<div class="card">
     <div style="font-size:14px;font-weight:800;margin-bottom:4px">${currentUser?.email}</div>
-    <div style="font-size:12px;color:#9A7A70">Rôle : Manager</div>
+    <div style="font-size:12px;color:${isRealManager?'#2E86AB':'#1A8C6E'};font-weight:700">${isRealManager?'📋 Manager':'🧢 Entraîneur'}</div>
   </div>
   <div class="sec-title">Mon équipe</div>
   ${team ? `<div class="card"><div style="font-size:14px;font-weight:700">${team.name}</div></div>` : ''}`;
 
-  if(team){
+  // Les liens d'invitation d'équipe sont réservés au manager
+  if(team && isRealManager){
     html += `<div class="sec-title">Inviter dans « ${team.name} »</div>
     <div class="card">
       <div style="font-size:12px;color:#9A7A70;margin-bottom:12px">Génère un lien par rôle et partage-le à la bonne personne.</div>
@@ -5239,39 +5231,6 @@ function renderKineChat(){
     }, 150);
   }, 0);
   return html;
-}
-
-function renderCoachChat(){
-  const team = getCoachTeam();
-  if(!team) return '<div class="card" style="text-align:center;padding:30px;color:#9A7A70">Aucune équipe associée.</div>';
-  let html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
-    '<span style="font-size:20px">💬</span>' +
-    '<div style="font-size:15px;font-weight:800">Chat — ' + escHtml(team.name) + '</div></div>' +
-    '<div id="chat-channels-bar"></div>' +
-    '<div id="chat-messages" style="min-height:300px;max-height:55vh;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
-    '<div style="display:flex;gap:8px">' +
-    '<input class="input" id="chat-input" placeholder="Votre message..." style="flex:1"/>' +
-    '<button onclick="sendChatMessage()" style="background:#1A8C6E;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700">➤</button>' +
-    '</div>';
-  setTimeout(()=>{
-    initChatView(team.id);
-    setTimeout(()=>{
-      const inp = document.getElementById('chat-input');
-      if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter') sendChatMessage(); });
-    }, 150);
-  }, 0);
-  return html;
-}
-
-function renderCoachProfil(){
-  const team = getCoachTeam();
-  return `<div class="card">
-    <div style="font-size:14px;font-weight:800;margin-bottom:4px">${escHtml(currentUser?.email||'')}</div>
-    <div style="font-size:12px;color:#1A8C6E;font-weight:700">🧢 Entraîneur</div>
-  </div>
-  <div class="sec-title">Mon équipe</div>
-  ${team ? `<div class="card"><div style="font-size:14px;font-weight:700">${escHtml(team.name)}</div></div>` : '<div class="card" style="color:#9A7A70;font-size:13px">Aucune équipe associée.</div>'}
-  <button onclick="doLogout()" style="width:100%;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:10px;padding:13px;color:#C0392B;font-weight:700;font-size:14px;margin-top:16px">Déconnexion</button>`;
 }
 
 // ── ESPACE KINÉ / SANTÉ ───────────────────────────────────────────────────
