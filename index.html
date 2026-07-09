@@ -290,6 +290,7 @@ let _piedMode = 'but';
 let _terrainSub = 'collectif'; // sous-type terrain // 'but', 'boxkick', 'sortie'
 let _piedShots = []; // [{type, x, y, x2, y2, result, miss_type, direct}]
 let _piedCurrentShot = null; // tir en cours // {team_event_id: note} notes de match individuelles
+let _piedContext = 'entrainement'; // 'entrainement' ou 'match' — contexte de la séance jeu au pied
 let playerInjuryLog = []; // journal de blessures du joueur
 let myTeamInvites = []; // invitations de l'équipe active (si manager/créateur)
 let activeTeamId = null; // équipe actuellement sélectionnée si plusieurs
@@ -6101,6 +6102,31 @@ function renderMoi(){
         </div>
       </div>
 
+      <!-- Répartition entraînement / match -->
+      ${(() => {
+        const entS = piedSessions.filter(s => (s.pied_stats?.contexte||'entrainement') === 'entrainement');
+        const matS = piedSessions.filter(s => s.pied_stats?.contexte === 'match');
+        if(!matS.length) return '';
+        const agg = list => {
+          const t = list.reduce((a,s)=>a+(s.pied_stats?.buts_total||0),0);
+          const r = list.reduce((a,s)=>a+(s.pied_stats?.buts_reussis||0),0);
+          return {t, r, pct: t?Math.round(r/t*100):null};
+        };
+        const e = agg(entS), m = agg(matS);
+        const cell = (icon, label, color, d) => `<div style="background:${color}10;border:1px solid ${color}33;border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:10px;color:#9A7A70;margin-bottom:2px">${icon} ${label}</div>
+          <div style="font-size:18px;font-weight:900;color:${color}">${d.t?d.r+'/'+d.t:'—'}</div>
+          ${d.pct!==null?`<div style="font-size:10px;font-weight:700;color:${color}">${d.pct}% réussite</div>`:''}
+        </div>`;
+        return `<div style="margin-bottom:12px">
+          <div style="font-size:11px;font-weight:700;color:#9A7A70;margin-bottom:8px">BUTS : ENTRAÎNEMENT VS MATCH</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+            ${cell('🏋️','Entraînement','#2E86AB',e)}
+            ${cell('⚔️','Match','#C0392B',m)}
+          </div>
+        </div>`;
+      })()}
+
       <!-- Analyse échecs -->
       ${totalEchecs > 0 ? `<div style="margin-bottom:12px">
         <div style="font-size:11px;font-weight:700;color:#9A7A70;margin-bottom:8px">ANALYSE DES ÉCHECS</div>
@@ -6126,9 +6152,9 @@ function renderMoi(){
           const pct = ps.buts_total ? Math.round(ps.buts_reussis/ps.buts_total*100) : null;
           const color = pct >= 80 ? '#27AE60' : pct >= 50 ? '#E67E22' : '#C0392B';
           return `<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid #F5EEE8">
-            <span>🦵</span>
+            <span>${ps.contexte==='match'?'⚔️':'🦵'}</span>
             <div style="flex:1">
-              <div style="font-size:12px;font-weight:700">${fmt(s.date)}</div>
+              <div style="font-size:12px;font-weight:700">${fmt(s.date)}${ps.contexte==='match'?' <span style="font-size:9px;background:#C0392B18;color:#C0392B;border-radius:10px;padding:1px 6px;font-weight:700">MATCH</span>':''}</div>
               <div style="font-size:10px;color:#9A7A70">${ps.buts_total?ps.buts_total+' buts':''}${ps.boxkicks_total?' · '+ps.boxkicks_total+' box kicks':''}${ps.commentaire?' · '+ps.commentaire.substring(0,20)+'...':''}</div>
             </div>
             ${pct !== null ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${color}18;color:${color}">${ps.buts_reussis}/${ps.buts_total}</span>` : ''}
@@ -7253,6 +7279,12 @@ function openPiedModule(sessionId){
   _piedShots = [];
   _piedMode = 'but';
   _piedCurrentShot = null;
+  _piedContext = 'entrainement';
+  renderPiedModal(sessionId);
+}
+
+function setPiedContext(ctx, sessionId){
+  _piedContext = ctx;
   renderPiedModal(sessionId);
 }
 
@@ -7277,6 +7309,11 @@ function renderPiedModal(sessionId){
     "<div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:12px\">" +
     "<div style=\"font-size:15px;font-weight:800\">🦵 Jeu au pied</div>" +
     "<span onclick=\"closePiedModal(" + sid + ")\" style=\"font-size:22px;color:#9A7A70;cursor:pointer\">×</span></div>" +
+    // Contexte : entraînement ou match
+    "<div style=\"display:flex;gap:6px;margin-bottom:10px\">" +
+    "<button onclick=\"setPiedContext('entrainement'," + sid + ")\" style=\"flex:1;padding:7px 4px;border-radius:8px;border:2px solid " + (_piedContext==='entrainement'?'#2E86AB':'#E8D8D0') + ";background:" + (_piedContext==='entrainement'?'#2E86AB18':'#F5EEE8') + ";font-size:11px;font-weight:700;color:" + (_piedContext==='entrainement'?'#2E86AB':'#9A7A70') + "\">🏋️ Entraînement</button>" +
+    "<button onclick=\"setPiedContext('match'," + sid + ")\" style=\"flex:1;padding:7px 4px;border-radius:8px;border:2px solid " + (_piedContext==='match'?'#C0392B':'#E8D8D0') + ";background:" + (_piedContext==='match'?'#C0392B18':'#F5EEE8') + ";font-size:11px;font-weight:700;color:" + (_piedContext==='match'?'#C0392B':'#9A7A70') + "\">⚔️ Match</button>" +
+    "</div>" +
     // Onglets
     "<div style=\"display:flex;gap:6px;margin-bottom:12px\">" +
     ["but","boxkick","sortie"].map((m,i) => {
@@ -7329,6 +7366,20 @@ function renderPiedModal(sessionId){
   openModal(html, sessionId);
 }
 
+// Distance du tir au but jusqu'aux poteaux (terrain 68m × 100m, zone en but = 9% de la hauteur)
+function piedButDistance(s){
+  const dx = (s.x - 0.5) * 68;
+  const dy = ((s.y - 0.09) / 0.82) * 100;
+  return Math.round(Math.sqrt(dx*dx + dy*dy));
+}
+
+// Distance d'un coup de pied entre le départ (x,y) et l'atterrissage (x2,y2)
+function piedKickDistance(s){
+  const dx = (s.x2 - s.x) * 68;
+  const dy = ((s.y2 - s.y) / 0.82) * 100;
+  return Math.round(Math.sqrt(dx*dx + dy*dy));
+}
+
 function renderPiedTerrain(){
   const W = 300, H = 320; // Terrain complet vue du ciel
   const shots = _piedShots.filter(s => s.type === _piedMode);
@@ -7367,6 +7418,12 @@ function renderPiedTerrain(){
     '<line x1="4" y1="' + y + '" x2="18" y2="' + y + '" stroke="#fff" stroke-width="1" opacity="0.5"/>' +
     '<line x1="' + (W-18) + '" y1="' + y + '" x2="' + (W-4) + '" y2="' + y + '" stroke="#fff" stroke-width="1" opacity="0.5"/>'
   ).join('');
+
+  // Lignes verticales des 5m et 15m (pointillés, terrain de 68m de large)
+  const vLines = [5/68, 15/68, 1 - 15/68, 1 - 5/68].map(r => {
+    const x = r * W;
+    return '<line x1="' + x + '" y1="' + butY1 + '" x2="' + x + '" y2="' + butY2 + '" stroke="#fff" stroke-width="1" stroke-dasharray="7,7" opacity="0.4"/>';
+  }).join('');
 
   // Position des poteaux (centre, ligne de but haute)
   const postCX = W / 2;
@@ -7413,6 +7470,26 @@ function renderPiedTerrain(){
     }
   });
 
+  // Tir EN COURS (pas encore validé) : marqueur jaune pulsant, ajustable aux flèches
+  if(_piedCurrentShot && _piedCurrentShot.type === _piedMode){
+    const c = _piedCurrentShot;
+    const ccx = c.x * W, ccy = c.y * H;
+    shotsHTML += '<circle cx="' + ccx + '" cy="' + ccy + '" r="10" fill="none" stroke="#FFD700" stroke-width="2.5"><animate attributeName="r" values="8;13;8" dur="1.2s" repeatCount="indefinite"/></circle>';
+    shotsHTML += '<circle cx="' + ccx + '" cy="' + ccy + '" r="5" fill="#FFD700" stroke="#1A0A0A" stroke-width="1"/>';
+    if(c.type === 'but'){
+      const dist = piedButDistance(c);
+      shotsHTML += '<rect x="' + (ccx+12) + '" y="' + (ccy-17) + '" width="36" height="14" rx="4" fill="#1A0A0ACC"/>';
+      shotsHTML += '<text x="' + (ccx+15) + '" y="' + (ccy-6) + '" fill="#FFD700" font-size="10" font-weight="bold">' + dist + 'm</text>';
+    }
+    if(c.x2 !== undefined && c.y2 !== undefined){
+      const ccx2 = c.x2 * W, ccy2 = c.y2 * H;
+      shotsHTML += '<line x1="' + ccx + '" y1="' + ccy + '" x2="' + ccx2 + '" y2="' + ccy2 + '" stroke="#FFD700" stroke-width="2" stroke-dasharray="5,3"/>';
+      shotsHTML += '<circle cx="' + ccx2 + '" cy="' + ccy2 + '" r="9" fill="none" stroke="#FFD700" stroke-width="2.5"><animate attributeName="r" values="7;11;7" dur="1.2s" repeatCount="indefinite"/></circle>';
+      shotsHTML += '<circle cx="' + ccx2 + '" cy="' + ccy2 + '" r="4" fill="#FFD700" stroke="#1A0A0A" stroke-width="1"/>';
+      if(c.distance) shotsHTML += '<text x="' + ((ccx+ccx2)/2) + '" y="' + ((ccy+ccy2)/2 - 8) + '" fill="#FFD700" font-size="10" text-anchor="middle" font-weight="bold">' + c.distance + 'm</text>';
+    }
+  }
+
   return '<div style="position:relative;margin-bottom:8px">' +
     '<svg width="100%" viewBox="0 0 ' + W + ' ' + H + '" style="border-radius:10px;cursor:crosshair;touch-action:none" id="pied-terrain" onclick="handlePiedTap(event)">' +
     // Fond pelouse
@@ -7450,6 +7527,8 @@ function renderPiedTerrain(){
     '<text x="' + (W-4) + '" y="' + (butY2-2) + '" fill="#fff" font-size="7" text-anchor="end" opacity="0.7">en but</text>' +
     // Tirets latéraux
     linesTirets +
+    // Lignes verticales 5m / 15m
+    vLines +
     // POTEAUX EN H haut
     '<line x1="' + pL + '" y1="' + postTopY + '" x2="' + pL + '" y2="' + postBotY + '" stroke="#FFD700" stroke-width="3" stroke-linecap="round"/>' +
     '<line x1="' + pR + '" y1="' + postTopY + '" x2="' + pR + '" y2="' + postBotY + '" stroke="#FFD700" stroke-width="3" stroke-linecap="round"/>' +
@@ -7464,10 +7543,42 @@ function renderPiedTerrain(){
     '</svg></div>';
 }
 
+// Pavé de flèches pour ajuster finement la position du ballon (~1m par appui)
+function renderPiedDpad(sessionId){
+  const btn = (arrow, dx, dy) => "<button onclick=\"movePiedShot(" + dx + "," + dy + "," + sessionId + ")\" style=\"width:46px;height:38px;background:#FFFFFF;border:1.5px solid #E8D8D0;border-radius:10px;font-size:15px\">" + arrow + "</button>";
+  return "<div style=\"display:flex;align-items:center;justify-content:center;gap:10px;margin:8px 0\">" +
+    "<div style=\"display:flex;flex-direction:column;align-items:center;gap:4px\">" +
+    btn('⬆️',0,-1) +
+    "<div style=\"display:flex;gap:4px\">" + btn('⬅️',-1,0) + btn('⬇️',0,1) + btn('➡️',1,0) + "</div>" +
+    "</div>" +
+    "<div style=\"font-size:10px;color:#9A7A70;max-width:110px;line-height:1.4\">Ajuste la position du ballon (~1 m par appui)</div>" +
+    "</div>";
+}
+
+function movePiedShot(dx, dy, sessionId){
+  const c = _piedCurrentShot;
+  if(!c) return;
+  const stepX = 1/68;       // ~1 m en largeur
+  const stepY = 0.82/100;   // ~1 m en longueur
+  const clamp = v => Math.max(0.01, Math.min(0.99, v));
+  if(c.x2 !== undefined){
+    // On ajuste le point d'atterrissage (box kick / sortie)
+    c.x2 = clamp(c.x2 + dx*stepX);
+    c.y2 = clamp(c.y2 + dy*stepY);
+    c.distance = piedKickDistance(c);
+  } else {
+    c.x = clamp(c.x + dx*stepX);
+    c.y = clamp(c.y + dy*stepY);
+  }
+  renderPiedModal(sessionId);
+}
+
 function renderPiedShotForm(sessionId){
   const s = _piedCurrentShot;
   if(_piedMode === 'but' && s.step === 1){
     return "<div style=\"background:#1A0A0A0C;border-radius:10px;padding:12px;margin-bottom:8px\">" +
+      "<div style=\"font-size:12px;font-weight:700\">🏉 Position du ballon — " + piedButDistance(s) + "m des poteaux</div>" +
+      renderPiedDpad(sessionId) +
       "<div style=\"font-size:12px;font-weight:700;margin-bottom:8px\">Résultat du tir :</div>" +
       "<div style=\"display:flex;gap:8px\">" +
       "<button onclick=\"validatePiedShot('ok'," + sessionId + ")\" style=\"flex:1;background:#27AE6018;border:2px solid #27AE60;border-radius:8px;padding:10px;font-size:18px\">✅</button>" +
@@ -7478,17 +7589,30 @@ function renderPiedShotForm(sessionId){
         "<button onclick=\"validatePiedShot('fail'," + sessionId + ",'gauche')\" style=\"flex:1;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:6px;padding:6px;font-size:11px;font-weight:700\">← Gauche</button>" +
         "<button onclick=\"validatePiedShot('fail'," + sessionId + ",'court')\" style=\"flex:1;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:6px;padding:6px;font-size:11px;font-weight:700\">↓ Court</button>" +
         "</div>" : '') +
+      "<button onclick=\"cancelPiedShot(" + sessionId + ")\" style=\"margin-top:8px;background:none;border:1px solid #E8D8D0;border-radius:6px;padding:6px 12px;font-size:11px;color:#9A7A70\">Annuler</button>" +
       "</div>";
   }
   if((_piedMode === 'boxkick' || _piedMode === 'sortie') && s.step === 2){
-    const extra = _piedMode === 'sortie' ? "<div style=\"display:flex;gap:6px;margin-top:8px\">" +
+    return "<div style=\"background:#1A0A0A0C;border-radius:10px;padding:12px;margin-bottom:8px\">" +
+      "<div style=\"font-size:12px;font-weight:700;margin-bottom:6px\">👆 Tap maintenant où " + (_piedMode==='boxkick'?'le ballon atterrit':'le ballon sort en touche') + "</div>" +
+      renderPiedDpad(sessionId) +
+      "<div style=\"font-size:10px;color:#9A7A70;margin-bottom:6px\">(les flèches ajustent le point de départ)</div>" +
+      "<button onclick=\"cancelPiedShot(" + sessionId + ")\" style=\"background:none;border:1px solid #E8D8D0;border-radius:6px;padding:6px 12px;font-size:11px;color:#9A7A70\">Annuler</button>" +
+      "</div>";
+  }
+  if((_piedMode === 'boxkick' || _piedMode === 'sortie') && s.step === 3){
+    const extra = _piedMode === 'sortie' ? "<div style=\"display:flex;gap:6px;margin:8px 0\">" +
       "<button onclick=\"setPiedDirect(true," + sessionId + ")\" style=\"flex:1;padding:8px;border-radius:8px;border:2px solid " + (s.direct===true?'#27AE60':'#E8D8D0') + ";background:" + (s.direct===true?'#27AE6018':'#F5EEE8') + ";font-size:12px;font-weight:700;color:" + (s.direct===true?'#27AE60':'#9A7A70') + "\">Direct</button>" +
       "<button onclick=\"setPiedDirect(false," + sessionId + ")\" style=\"flex:1;padding:8px;border-radius:8px;border:2px solid " + (s.direct===false?'#27AE60':'#E8D8D0') + ";background:" + (s.direct===false?'#27AE6018':'#F5EEE8') + ";font-size:12px;font-weight:700;color:" + (s.direct===false?'#27AE60':'#9A7A70') + "\">Indirect</button>" +
       "</div>" : '';
     return "<div style=\"background:#1A0A0A0C;border-radius:10px;padding:12px;margin-bottom:8px\">" +
-      "<div style=\"font-size:12px;font-weight:700;margin-bottom:6px\">👆 Tap maintenant où " + (_piedMode==='boxkick'?'le ballon atterrit':'le ballon sort en touche') + "</div>" +
+      "<div style=\"font-size:12px;font-weight:700\">📏 " + (s.distance||0) + "m — ajuste le point " + (_piedMode==='boxkick'?"d'atterrissage":"de sortie en touche") + " si besoin</div>" +
+      renderPiedDpad(sessionId) +
       extra +
-      "<button onclick=\"cancelPiedShot(" + sessionId + ")\" style=\"margin-top:8px;background:none;border:1px solid #E8D8D0;border-radius:6px;padding:6px 12px;font-size:11px;color:#9A7A70\">Annuler</button>" +
+      "<div style=\"display:flex;gap:8px\">" +
+      "<button onclick=\"confirmPiedKick(" + sessionId + ")\" style=\"flex:1;background:#27AE60;color:#fff;border:none;border-radius:8px;padding:10px;font-weight:800;font-size:13px\">✅ VALIDER</button>" +
+      "<button onclick=\"cancelPiedShot(" + sessionId + ")\" style=\"background:none;border:1px solid #E8D8D0;border-radius:8px;padding:6px 12px;font-size:11px;color:#9A7A70\">Annuler</button>" +
+      "</div>" +
       "</div>";
   }
   return '';
@@ -7526,30 +7650,48 @@ function handlePiedTap(event){
   const sid = parseInt(svg.closest('[data-sid]')?.dataset?.sid || 0);
 
   if(!_piedCurrentShot){
-    // Premier tap
+    // Premier tap : placer le ballon
     _piedCurrentShot = {type: _piedMode, x, y, step: 1, result: null};
     if(_piedMode === 'boxkick' || _piedMode === 'sortie'){
       _piedCurrentShot.step = 2;
     }
   } else if(_piedCurrentShot.step === 2){
-    // Deuxième tap — calculer distance
-    const dx = (x - _piedCurrentShot.x) * 82;  // ~82m de jeu (terrain 100m - 2 zones en but)
-    const dy = (y - _piedCurrentShot.y) * 68;  // ~68m de large
-    const dist = Math.round(Math.sqrt(dx*dx + dy*dy));
+    // Deuxième tap : placer l'atterrissage — puis étape d'ajustement avant validation
     _piedCurrentShot.x2 = x;
     _piedCurrentShot.y2 = y;
-    _piedCurrentShot.distance = dist;
-    _piedCurrentShot.result = 'ok';
-    _piedShots.push({..._piedCurrentShot});
-    _piedCurrentShot = null;
+    _piedCurrentShot.distance = piedKickDistance(_piedCurrentShot);
+    _piedCurrentShot.step = 3;
+  } else if(_piedCurrentShot.step === 3){
+    // Re-tap : repositionner l'atterrissage
+    _piedCurrentShot.x2 = x;
+    _piedCurrentShot.y2 = y;
+    _piedCurrentShot.distance = piedKickDistance(_piedCurrentShot);
+  } else if(_piedMode === 'but' && _piedCurrentShot.step === 1){
+    // Re-tap : repositionner le ballon
+    _piedCurrentShot.x = x;
+    _piedCurrentShot.y = y;
   }
   renderPiedModal(sid);
+}
+
+function confirmPiedKick(sessionId){
+  const c = _piedCurrentShot;
+  if(!c || c.x2 === undefined) return;
+  c.distance = piedKickDistance(c);
+  c.result = 'ok';
+  delete c.step;
+  _piedShots.push({...c});
+  _piedCurrentShot = null;
+  renderPiedModal(sessionId);
 }
 
 function validatePiedShot(result, sessionId, missType){
   if(!_piedCurrentShot) return;
   _piedCurrentShot.result = result;
   if(missType) _piedCurrentShot.miss_type = missType;
+  if(_piedCurrentShot.type === 'but') _piedCurrentShot.distance = piedButDistance(_piedCurrentShot);
+  delete _piedCurrentShot.step;
+  delete _piedCurrentShot.missOptions;
   _piedShots.push({..._piedCurrentShot});
   _piedCurrentShot = null;
   renderPiedModal(sessionId);
@@ -7595,6 +7737,7 @@ async function savePiedSession(sessionId){
 
   const stats = {
     shots: _piedShots,
+    contexte: _piedContext, // 'entrainement' ou 'match'
     buts_total: buts.length,
     buts_reussis: buts.filter(s=>s.result==='ok').length,
     buts_pct: butsPct,
