@@ -6282,6 +6282,20 @@ function renderStats(){
   // ── BLOC 4 : Jeu au pied (conditionnel) ──
   if(hasPied){
     const butPct = totalButs ? Math.round(totalButsR/totalButs*100) : 0;
+    // Répartition entraînement / match
+    const entS = piedSessions.filter(s => (s.pied_stats?.contexte||'entrainement') === 'entrainement');
+    const matS = piedSessions.filter(s => s.pied_stats?.contexte === 'match');
+    const aggPied = list => {
+      const t = list.reduce((a,s)=>a+(s.pied_stats?.buts_total||0),0);
+      const r = list.reduce((a,s)=>a+(s.pied_stats?.buts_reussis||0),0);
+      return {t, r, pct: t?Math.round(r/t*100):null};
+    };
+    const eStats = aggPied(entS), mStats = aggPied(matS);
+    const splitCell = (icon, label, color, d) => `<div style="background:${color}10;border:1px solid ${color}33;border-radius:12px;padding:12px;text-align:center">
+      <div style="font-size:10px;color:#9A7A70;margin-bottom:2px">${icon} ${label}</div>
+      <div style="font-size:22px;font-weight:900;color:${color}">${d.pct!==null?d.pct+'%':'—'}</div>
+      <div style="font-size:10px;color:#9A7A70;margin-top:2px">${d.t?d.r+'/'+d.t+' buts':'aucun but'}</div>
+    </div>`;
     html += `<div class="card" style="margin-top:12px">
       <div class="sec-title" style="margin-bottom:12px">🦵 Jeu au pied</div>
       <div style="display:grid;grid-template-columns:1fr 1fr${totalBK?'':''};gap:10px">
@@ -6294,6 +6308,13 @@ function renderStats(){
           <div style="font-size:11px;color:#9A7A70;margin-top:2px">Box kick moy. (${totalBK})</div>
         </div>` : ''}
       </div>
+      ${matS.length ? `<div style="margin-top:10px">
+        <div style="font-size:11px;font-weight:700;color:#9A7A70;margin-bottom:8px">ENTRAÎNEMENT VS MATCH</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+          ${splitCell('🏋️','Entraînement','#2E86AB',eStats)}
+          ${splitCell('⚔️','Match','#C0392B',mStats)}
+        </div>
+      </div>` : ''}
     </div>`;
   }
 
