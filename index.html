@@ -324,7 +324,7 @@ const SESSION_TYPES = {
   course:{label:"Course",icon:"🏃",color:'#E67E22'},
   match:{label:"Match",icon:"⚔️",color:C.red},
   recup:{label:"Récup",icon:"💤",color:C.teal},
-  kine:{label:"Kiné",icon:"🩺",color:C.pink},
+  kine:{label:"Soin",icon:"🩺",color:C.pink},
 };
 
 const RESSENTI = ["😴 Épuisé","😐 Moyen","🙂 Bien","💪 Super","🔥 En feu"];
@@ -372,7 +372,7 @@ const MUSCU_PROGRAMS = {
   phase1_force:{label:"Force bas du corps",icon:"⚡",color:C.orange,duree:60,exercices:["Squat goblet — 4×5 lourd","Romanian Deadlift — 3×8","Leg press — 4×8","Fentes bulgares — 3×10/jambe","Curl biceps — 3×12"]},
   phase1_cardio:{label:"Cardio & explosivité",icon:"💨",color:C.teal,duree:45,exercices:["Vélo stationnaire — 15 min échauffement","Sprint vélo 8×20sec / 40sec récup","Squat jump — 4×10","Step-ups — 3×12/jambe","Gainage coude — 3×40sec"]},
   phase1_mobilite:{label:"Mobilité & gainage",icon:"🧘",color:C.purple,duree:40,exercices:["Mobilité hanches — cercles, hip 90/90 — 10 min","Étirements ischio-jambiers — 3×30sec","Gainage ventral sur coudes — 4×45sec","Pont fessier unilatéral — 4×15","Proprioception cheville — 3×1min/côté"]},
-  phase2_kinemix:{label:"Kiné + renfo léger",icon:"🔄",color:C.orange,duree:75,exercices:["Kiné : mobilisations actives/passives","Kiné : proprioception","Squat libre progressif — 4×8","Hip thrust — 4×12","Tirage vertical — 3×10"]},
+  phase2_kinemix:{label:"Soins + renfo léger",icon:"🔄",color:C.orange,duree:75,exercices:["Kiné : mobilisations actives/passives","Kiné : proprioception","Squat libre progressif — 4×8","Hip thrust — 4×12","Tirage vertical — 3×10"]},
   phase2_cardio:{label:"Cardio progressif",icon:"🏃",color:C.teal,duree:50,exercices:["Footing léger 20 min","Vélo 15 min interval training léger","Agilité pieds échelle — 4 séries","Squat jump — 3×8","Démarrages explosifs — 5×10m"]},
   phase3_force:{label:"Force / Puissance",icon:"⚡",color:C.orange,duree:70,exercices:["Squat — 4×5 charge progressive","Hip thrust — 4×8 lourd","Soulevé de terre — 3×5","Développé militaire progressif — 3×8","Curl + extensions poignet — 3×15"]},
   phase3_vitesse:{label:"Vitesse & Agilité",icon:"💨",color:C.teal,duree:55,exercices:["Sprints 10m/20m/30m — 3 séries chaque","Changements direction 5-10-5 — 6 reps","Démarrages sur signal — 8×10m","Feintes pieds — 2×5 min","Foulées bondissantes — 4×20m"]},
@@ -716,7 +716,7 @@ async function saveProfile(prefs){
 // ── AUTH SCREENS ──────────────────────────────────────────────────────────────
 function renderAuthScreen(){
   const app = document.getElementById('app');
-  const subtitle = _portalChoice === 'staff' ? "Espace staff — manager, préparateur, kiné" : _portalChoice === 'joueur' ? "Ton suivi de performance rugbystique" : "Ton suivi de performance rugbystique";
+  const subtitle = _portalChoice === 'staff' ? "Espace staff — manager, préparateur, médical" : _portalChoice === 'joueur' ? "Ton suivi de performance rugbystique" : "Ton suivi de performance rugbystique";
   app.innerHTML = `
   <div class="auth-screen">
     ${_portalChoice ? `<button onclick="renderPortalScreen()" style="align-self:flex-start;background:none;border:none;color:#9A7A70;font-size:13px;margin-bottom:8px;cursor:pointer">← Retour</button>` : ''}
@@ -1242,7 +1242,7 @@ function render(){
   if(el) el.innerHTML = (views[currentView]||renderDashboard)();
 }
 
-const moreTabs = [{id:"athlete",icon:"🎯",label:"Tests & objectifs"},{id:"charges",icon:"🏋️",label:"Charges"},{id:"kine",icon:"🩺",label:"Kiné"},{id:"planning",icon:"📅",label:"Matchs à venir"},{id:"calendar",icon:"🗓️",label:"Calendrier"},{id:"equipe",icon:"🤝",label:"Équipe"},{id:"chat_joueur",icon:"💬",label:"Chat équipe"}];
+const moreTabs = [{id:"athlete",icon:"🎯",label:"Tests & objectifs"},{id:"charges",icon:"🏋️",label:"Charges"},{id:"kine",icon:"🩺",label:"Médical"},{id:"planning",icon:"📅",label:"Matchs à venir"},{id:"calendar",icon:"🗓️",label:"Calendrier"},{id:"equipe",icon:"🤝",label:"Équipe"},{id:"chat_joueur",icon:"💬",label:"Chat équipe"}];
 
 function renderKineNav(){
   const navEl = document.getElementById('nav');
@@ -4725,7 +4725,7 @@ const TEAM_ROLES = {
   joueur: {label:'Joueur', icon:'🏉', color:'#8B1A1A'},
   manager: {label:'Manager', icon:'📋', color:'#2E86AB'},
   prepa: {label:'Préparateur physique', icon:'🏋️', color:'#D4841A'},
-  kine: {label:'Kiné', icon:'🩺', color:'#C0185A'},
+  kine: {label:'Médical', icon:'🩺', color:'#C0185A'},
   coach: {label:'Entraîneur', icon:'🧢', color:'#1A8C6E'}
 };
 
@@ -5254,8 +5254,8 @@ function renderKineConsentToggle(){
   const consentTeamId = userProfile?.kine_consent_team_id;
   const consentTeam = myTeams.find(t => t.id === consentTeamId);
   return `<div style="background:#C0185A0C;border:1px solid #C0185A33;border-radius:12px;padding:14px;margin-top:8px">
-    <div style="font-size:12px;font-weight:800;color:#C0185A;margin-bottom:6px">🩺 Partage avec le kiné de l'équipe</div>
-    <div style="font-size:11px;color:#9A7A70;margin-bottom:10px;line-height:1.5">Active pour donner au kiné de ton équipe l'accès à tes données de blessures et de douleurs/courbatures. Désactivable à tout moment.</div>
+    <div style="font-size:12px;font-weight:800;color:#C0185A;margin-bottom:6px">🩺 Partage avec le staff médical</div>
+    <div style="font-size:11px;color:#9A7A70;margin-bottom:10px;line-height:1.5">Active pour donner au staff médical de ton équipe l'accès à tes données de blessures et de douleurs/courbatures. Désactivable à tout moment.</div>
     <select class="input" id="pm-kine-consent">
       <option value="">❌ Ne rien partager</option>
       ${teamsWithKine.map(t => `<option value="${t.id}" ${consentTeamId===t.id?'selected':''}>✅ Partager avec « ${t.name} »</option>`).join('')}
@@ -5307,10 +5307,59 @@ function renderInjuryCard(inj){
   </div>`;
 }
 
+// Silhouette cliquable (vue face + vue dos, convention miroir : gauche à l'écran = ton côté gauche)
+function renderBodyMap(){
+  const z = (shape, label, attrs) => {
+    const common = 'class="bz" data-z="' + label + '" onclick="selectBodyZone(this)" fill="rgba(255,255,255,0.25)" stroke="rgba(255,255,255,0.4)" stroke-width="0.5" style="cursor:pointer"';
+    return shape === 'e'
+      ? '<ellipse cx="'+attrs[0]+'" cy="'+attrs[1]+'" rx="'+attrs[2]+'" ry="'+attrs[3]+'" '+common+'/>'
+      : '<rect x="'+attrs[0]+'" y="'+attrs[1]+'" width="'+attrs[2]+'" height="'+attrs[3]+'" rx="5" '+common+'/>';
+  };
+  // FACE (autour de x=75) puis DOS (autour de x=225)
+  const zones =
+    z('e','Tête',[75,24,12,13]) +
+    z('e','Épaule gauche',[54,48,10,7]) + z('e','Épaule droite',[96,48,10,7]) +
+    z('r','Pectoraux / Côtes',[59,54,32,26]) +
+    z('r','Abdominaux',[61,82,28,22]) +
+    z('e','Biceps gauche',[45,72,7,13]) + z('e','Biceps droit',[105,72,7,13]) +
+    z('e','Avant-bras gauche',[40,100,6,13]) + z('e','Avant-bras droit',[110,100,6,13]) +
+    z('e','Poignet / Main gauche',[37,124,6,9]) + z('e','Poignet / Main droite',[113,124,6,9]) +
+    z('e','Hanche / Adducteur gauche',[65,112,9,8]) + z('e','Hanche / Adducteur droit',[85,112,9,8]) +
+    z('e','Quadriceps gauche',[64,142,9,18]) + z('e','Quadriceps droit',[86,142,9,18]) +
+    z('e','Genou gauche',[64,169,7,8]) + z('e','Genou droit',[86,169,7,8]) +
+    z('e','Tibia gauche',[64,194,6,14]) + z('e','Tibia droit',[86,194,6,14]) +
+    z('e','Cheville gauche',[64,217,6,6]) + z('e','Cheville droite',[86,217,6,6]) +
+    z('e','Pied gauche',[62,230,8,5]) + z('e','Pied droit',[88,230,8,5]) +
+    z('e','Tête (arrière)',[225,20,10,11]) +
+    z('e','Nuque / Cervicales',[225,38,8,6]) +
+    z('r','Dos / Trapèzes',[209,47,32,28]) +
+    z('r','Lombaires',[211,77,28,18]) +
+    z('r','Fessiers',[210,97,30,16]) +
+    z('e','Ischio gauche',[214,135,9,17]) + z('e','Ischio droit',[236,135,9,17]) +
+    z('e','Mollet gauche',[214,187,7,15]) + z('e','Mollet droit',[236,187,7,15]) +
+    z('e','Tendon d\'Achille gauche',[214,214,5,7]) + z('e','Tendon d\'Achille droit',[236,214,5,7]);
+  return '<div style="background:#22303C;border-radius:12px;padding:8px 4px;margin-bottom:10px">' +
+    '<div style="font-size:10px;color:#9AB0C0;text-align:center;margin-bottom:4px">👆 Touche la zone douloureuse (comme dans un miroir)</div>' +
+    '<svg width="100%" viewBox="0 0 300 242">' +
+    '<text x="75" y="10" fill="#9AB0C0" font-size="9" text-anchor="middle" font-weight="bold">FACE</text>' +
+    '<text x="225" y="10" fill="#9AB0C0" font-size="9" text-anchor="middle" font-weight="bold">DOS</text>' +
+    zones +
+    '</svg></div>';
+}
+
+function selectBodyZone(el){
+  document.querySelectorAll('.bz').forEach(b => { b.setAttribute('fill','rgba(255,255,255,0.25)'); b.setAttribute('stroke','rgba(255,255,255,0.4)'); });
+  el.setAttribute('fill','#FFD700');
+  el.setAttribute('stroke','#FFD700');
+  const input = document.getElementById('inj-type');
+  if(input) input.value = el.getAttribute('data-z');
+}
+
 function openInjuryModal(id){
   const inj = id ? myInjuries.find(i => i.id === id) : null;
   const html = `<div class="modal-title">🩹 ${inj?'MODIFIER':'DÉCLARER'} UNE BLESSURE</div>
-    <div class="auth-field"><label>Type de blessure</label><input class="auth-input input" id="inj-type" placeholder="Ex: Entorse cheville" value="${inj?.type||''}"/></div>
+    ${renderBodyMap()}
+    <div class="auth-field"><label>Zone / type de blessure</label><input class="auth-input input" id="inj-type" placeholder="Touche la silhouette ou écris ici" value="${inj?.type||''}"/></div>
     <div class="auth-field"><label>Gravité</label>
       <select class="auth-input input" id="inj-gravite">
         ${Object.entries(GRAVITE_INFO).map(([k,v])=>`<option value="${k}" ${inj?.gravite===k?'selected':''}>${v.icon} ${v.label}</option>`).join('')}
@@ -5323,6 +5372,7 @@ function openInjuryModal(id){
         ${Object.entries(STATUT_INFO).map(([k,v])=>`<option value="${k}" ${inj?.statut===k?'selected':''}>${v.label}</option>`).join('')}
       </select>
     </div>
+    <div class="auth-field"><label>📷 Photo pour le staff médical (optionnel)</label><input class="auth-input input" type="file" id="inj-photo" accept="image/*"/></div>
     <div class="auth-field"><label>Notes</label><textarea class="auth-input input" id="inj-notes" rows="2">${inj?.notes||''}</textarea></div>
     <button class="btn-save" onclick="saveInjury(${id||'null'})" style="background:#C0185A;color:#fff">ENREGISTRER</button>
     ${inj?`<button onclick="deleteInjury(${id})" style="width:100%;background:none;border:none;color:#C0392B;font-size:13px;padding:10px;margin-top:4px">🗑️ Supprimer</button>`:''}`;
@@ -5342,6 +5392,9 @@ async function saveInjury(id){
   const row = {user_id: currentUser.id, type, gravite, date_debut, duree_estimee_jours, statut, notes};
   if(statut === 'gueri') row.date_fin = today();
 
+  const photoFile = document.getElementById('inj-photo')?.files?.[0];
+  let injuryId = id;
+
   if(id){
     const {error} = await sb.from('injuries').update(row).eq('id', id);
     if(error){ showToast('Erreur : '+error.message, 'error'); return; }
@@ -5350,17 +5403,123 @@ async function saveInjury(id){
     const {data, error} = await sb.from('injuries').insert(row).select().single();
     if(error){ showToast('Erreur : '+error.message, 'error'); return; }
     myInjuries = [data, ...myInjuries];
-    // Prévenir le staff médical (kiné + manager) des équipes du joueur
+    injuryId = data?.id;
+    // Prévenir le staff médical (médical + manager) des équipes du joueur
     myTeams.filter(t => t.myRole === 'joueur').forEach(async t => {
       try {
         const {data: staff} = await sb.from('team_members').select('user_id').eq('team_id', t.id).in('role', ['kine','manager']);
         const ids = [...new Set((staff||[]).map(s => s.user_id))].filter(uid => uid !== currentUser.id);
-        if(ids.length) sendPushToTeam(t.id, '🩹 ' + t.name, userName() + ' a déclaré une blessure : ' + type + (gravite ? ' (' + gravite + ')' : ''), ids);
+        if(ids.length) sendPushToTeam(t.id, '🩹 ' + t.name, userName() + ' a déclaré une blessure : ' + type + (gravite ? ' (' + gravite + ')' : '') + (photoFile ? ' 📷 photo jointe' : ''), ids);
       } catch(e){}
     });
   }
+
+  // Photo jointe → dossier médical partagé
+  if(photoFile){
+    try {
+      const path = currentUser.id + '/' + Date.now() + '_' + photoFile.name;
+      const {error: upErr} = await sb.storage.from('medical').upload(path, photoFile);
+      if(upErr){ showToast('Blessure OK mais photo non envoyée : '+upErr.message, 'error'); }
+      else {
+        const teamId = myTeams.find(t => t.myRole === 'joueur')?.id || null;
+        await sb.from('medical_files').insert({team_id: teamId, player_id: currentUser.id, sender_id: currentUser.id, injury_id: injuryId, file_path: path, file_type: 'photo', note: '📷 ' + type});
+      }
+    } catch(e){}
+  }
+
   closeModal(); render();
   showToast('Blessure enregistrée', 'success');
+}
+
+// ── DOSSIER MÉDICAL PARTAGÉ (photos / PDF entre joueur et staff médical) ─────
+async function openMedicalFile(path){
+  const {data, error} = await sb.storage.from('medical').createSignedUrl(path, 3600);
+  if(error || !data?.signedUrl){ showToast('Impossible d\'ouvrir le document : ' + (error?.message||''), 'error'); return; }
+  window.open(data.signedUrl, '_blank');
+}
+
+function medicalFileRow(f, senderLabel){
+  return `<div class="card" style="display:flex;align-items:center;gap:10px;padding:12px">
+    <span style="font-size:20px">${f.file_type==='pdf'?'📄':'📷'}</span>
+    <div style="flex:1">
+      <div style="font-size:13px;font-weight:700">${escHtml(f.note||'Document')}</div>
+      <div style="font-size:11px;color:#9A7A70">${escHtml(senderLabel)} · ${fmt(f.created_at.split('T')[0])}</div>
+    </div>
+    <button onclick="openMedicalFile('${f.file_path.replace(/'/g,"\\'")}')" style="background:#C0185A18;border:1px solid #C0185A44;border-radius:8px;padding:7px 14px;color:#C0185A;font-size:12px;font-weight:700">Voir</button>
+  </div>`;
+}
+
+// Section côté joueur (onglet Médical)
+function renderMedicalDocsSection(){
+  setTimeout(loadMyMedicalFiles, 0);
+  return `<div class="sec-title">📁 Mes documents médicaux</div>
+  <button onclick="openSendMedicalDoc()" style="width:100%;background:#C0185A18;border:1px dashed #C0185A66;border-radius:10px;padding:11px;color:#C0185A;font-weight:700;font-size:13px;margin-bottom:10px">📷 Envoyer une photo / un document au médical</button>
+  <div id="medical-docs-list" style="margin-bottom:14px">Chargement...</div>`;
+}
+
+async function loadMyMedicalFiles(){
+  const container = document.getElementById('medical-docs-list');
+  if(!container) return;
+  const {data, error} = await sb.from('medical_files').select('*').eq('player_id', currentUser.id).order('created_at', {ascending:false}).limit(20);
+  if(error){ container.innerHTML = '<div style="font-size:12px;color:#9A7A70;text-align:center;padding:8px">Documents indisponibles (SQL "dossier médical" à exécuter).</div>'; return; }
+  if(!data?.length){ container.innerHTML = '<div style="font-size:12px;color:#9A7A70;text-align:center;padding:8px">Aucun document échangé pour l\'instant.</div>'; return; }
+  container.innerHTML = data.map(f => medicalFileRow(f, f.sender_id === currentUser.id ? 'Moi' : '🩺 Staff médical')).join('');
+}
+
+// Modal d'envoi (utilisée par le joueur ET par le staff médical)
+function openSendMedicalDoc(playerId, playerName, teamId){
+  const toPlayer = !!playerId;
+  const target = toPlayer ? `'${playerId}','${(playerName||'').replace(/'/g,"\\'")}',${teamId}` : 'null,null,null';
+  const html = `<div class="modal-title">📎 ENVOYER UN DOCUMENT${toPlayer?' — '+playerName.toUpperCase():''}</div>
+  <div style="font-size:11px;color:#9A7A70;margin-bottom:12px;line-height:1.5">${toPlayer?'Le joueur recevra une notification et retrouvera le document dans son onglet Médical.':'Ton staff médical recevra une notification. Photo de blessure, ordonnance, compte-rendu...'}</div>
+  <div class="field"><label>Photo ou PDF</label><input class="input" type="file" id="md-file" accept="image/*,application/pdf"/></div>
+  <div class="field"><label>Note (optionnel)</label><input class="input" id="md-note" placeholder="Ex: Photo du genou, ordonnance IRM..."/></div>
+  <div style="display:flex;gap:8px">
+    <button class="btn-save" onclick="submitMedicalDoc(${target})" style="background:#C0185A;color:#fff">ENVOYER</button>
+    <button class="btn-cancel" onclick="closeModal()">Annuler</button>
+  </div>`;
+  openModal(html);
+}
+
+async function submitMedicalDoc(playerId, playerName, teamId){
+  const file = document.getElementById('md-file')?.files?.[0];
+  const note = document.getElementById('md-note')?.value.trim() || '';
+  if(!file){ showToast('Choisis un fichier', 'error'); return; }
+  const isPdf = file.type === 'application/pdf';
+  const targetPlayer = playerId || currentUser.id;
+  const tId = teamId || myTeams.find(t => t.myRole === 'joueur')?.id || myTeams[0]?.id || null;
+  const path = targetPlayer + '/' + Date.now() + '_' + file.name;
+  const {error: upErr} = await sb.storage.from('medical').upload(path, file);
+  if(upErr){ showToast('Erreur envoi : ' + upErr.message, 'error'); return; }
+  const {error} = await sb.from('medical_files').insert({team_id: tId, player_id: targetPlayer, sender_id: currentUser.id, file_path: path, file_type: isPdf ? 'pdf' : 'photo', note});
+  if(error){ showToast('Erreur : ' + error.message, 'error'); return; }
+  closeModal();
+  showToast('Document envoyé ✅', 'success');
+  if(playerId){
+    // Staff médical → joueur
+    sendPushToTeam(teamId, '🩺 Suivi médical', 'Le staff médical t\'a envoyé un document' + (note ? ' : ' + note : ''), playerId);
+    loadKinePlayerFiles(playerId);
+  } else {
+    // Joueur → staff médical de ses équipes
+    myTeams.filter(t => t.myRole === 'joueur').forEach(async t => {
+      try {
+        const {data: staff} = await sb.from('team_members').select('user_id').eq('team_id', t.id).eq('role', 'kine');
+        const ids = [...new Set((staff||[]).map(s => s.user_id))];
+        if(ids.length) sendPushToTeam(t.id, '🩺 ' + t.name, userName() + ' t\'a envoyé un document médical' + (note ? ' : ' + note : ''), ids);
+      } catch(e){}
+    });
+    loadMyMedicalFiles();
+  }
+}
+
+// Liste des documents dans la fiche joueur côté staff médical
+async function loadKinePlayerFiles(playerId){
+  const container = document.getElementById('kine-player-files');
+  if(!container) return;
+  const {data, error} = await sb.from('medical_files').select('*').eq('player_id', playerId).order('created_at', {ascending:false}).limit(20);
+  if(error){ container.innerHTML = '<div style="font-size:12px;color:#9A7A70;text-align:center;padding:8px">Documents indisponibles (SQL "dossier médical" à exécuter).</div>'; return; }
+  if(!data?.length){ container.innerHTML = '<div style="font-size:12px;color:#9A7A70;text-align:center;padding:8px">Aucun document.</div>'; return; }
+  container.innerHTML = data.map(f => medicalFileRow(f, f.sender_id === playerId ? '🏉 Joueur' : '🩺 Staff médical')).join('');
 }
 
 async function deleteInjury(id){
@@ -5384,7 +5543,7 @@ function renderKineHome(){
     <div style="display:flex;align-items:center;gap:12px">
       <div style="width:44px;height:44px;border-radius:50%;background:#C0185A18;border:2px solid #C0185A44;display:flex;align-items:center;justify-content:center;font-size:20px">🩺</div>
       <div>
-        <div style="font-size:16px;font-weight:800">Espace Kiné</div>
+        <div style="font-size:16px;font-weight:800">Espace Médical</div>
         <div style="font-size:12px;color:#9A7A70">${team.name}</div>
       </div>
     </div>
@@ -5465,7 +5624,7 @@ function renderKineProfil(){
   const kineTeams = myTeams.filter(t => t.myRole === 'kine');
   return `<div class="card">
     <div style="font-size:14px;font-weight:800;margin-bottom:4px">${currentUser?.email}</div>
-    <div style="font-size:12px;color:#9A7A70">Rôle : Kinésithérapeute</div>
+    <div style="font-size:12px;color:#9A7A70">Rôle : Médical</div>
   </div>
   <div class="sec-title">Mes équipes</div>
   ${kineTeams.map(t => `<div class="card"><div style="font-size:14px;font-weight:700">${t.name}</div></div>`).join('')}
@@ -5479,7 +5638,7 @@ function renderKineSpace(){
   }
 
   let html = `<div class="card" style="background:#C0185A0C;border-color:#C0185A33">
-    <div style="font-size:13px;color:#C0185A;font-weight:800">🩺 Espace Kiné</div>
+    <div style="font-size:13px;color:#C0185A;font-weight:800">🩺 Espace Médical</div>
     <div style="font-size:11px;color:#9A7A70;margin-top:4px;line-height:1.5">Tu ne vois que les joueurs ayant explicitement activé le partage de leurs données santé avec toi.</div>
   </div>`;
 
@@ -5536,9 +5695,13 @@ async function openKinePlayerDetail(playerId, playerName, teamId){
       <button onclick="openDmWith('${playerId}','kine_chat')" style="flex:1;background:#7B2D8B18;border:1px solid #7B2D8B44;border-radius:8px;padding:9px;font-weight:700;font-size:12px;color:#7B2D8B">✉️ Message</button>
     </div>
     <div class="sec-title">Blessures</div>${injHtml}
+    <div class="sec-title" style="margin-top:12px">📁 Documents échangés</div>
+    <button onclick="openSendMedicalDoc('${playerId}','${playerName.replace(/'/g,"\\'")}',${teamId})" style="width:100%;background:#C0185A18;border:1px dashed #C0185A66;border-radius:10px;padding:10px;color:#C0185A;font-weight:700;font-size:12px;margin-bottom:8px">📎 Envoyer une photo / un PDF au joueur</button>
+    <div id="kine-player-files">Chargement...</div>
     <div class="sec-title" style="margin-top:12px">Notes récentes</div>
     ${(notes||[]).length ? notes.map(n=>`<div style="background:#F5EEE8;border-radius:8px;padding:8px;margin-bottom:6px"><div style="font-size:11px;color:#9A7A70">${fmt(n.created_at?.split('T')[0]||'')}</div><div style="font-size:12px">${n.note||''}</div></div>`).join('') : '<div style="font-size:12px;color:#9A7A70">Aucune note.</div>'}`;
   openModal(html);
+  loadKinePlayerFiles(playerId);
 }
 
 async function toggleKineApte(playerId, teamId, newApte){
@@ -5548,7 +5711,7 @@ async function toggleKineApte(playerId, teamId, newApte){
   closeModal(); showToast(newApte ? 'Joueur déclaré apte ✓' : 'Joueur déclaré non apte', 'success');
   // Prévenir le joueur de son changement de statut
   const t = myTeams.find(x => x.id === teamId);
-  sendPushToTeam(teamId, '🩺 ' + (t?.name||'Rugby Perf'), newApte ? 'Le kiné t\'a déclaré apte au jeu ✓' : 'Le kiné t\'a déclaré non apte au jeu ⚠️', playerId);
+  sendPushToTeam(teamId, '🩺 ' + (t?.name||'Rugby Perf'), newApte ? 'Le staff médical t\'a déclaré apte au jeu ✓' : 'Le staff médical t\'a déclaré non apte au jeu ⚠️', playerId);
   loadKineTeamData(teamId);
 }
 
@@ -5592,7 +5755,7 @@ async function submitKineInjury(playerId, playerName, teamId){
   showToast('Blessure déclarée pour '+playerName, 'success');
   // Prévenir le joueur
   const t = myTeams.find(x => x.id === teamId);
-  sendPushToTeam(teamId, '🩺 ' + (t?.name||'Rugby Perf'), 'Le kiné a ajouté une blessure à ton dossier : ' + type, playerId);
+  sendPushToTeam(teamId, '🩺 ' + (t?.name||'Rugby Perf'), 'Le staff médical a ajouté une blessure à ton dossier : ' + type, playerId);
   loadKineTeamData(teamId);
 }
 
@@ -5660,7 +5823,7 @@ function openKineSessionForm(playerId, playerName){
   _kineSessionTargetId = playerId;
   _kineSessionTargetName = playerName;
   const html = `<div style="display:flex;justify-content:space-between;align-items:center">
-    <div class="modal-title" style="margin-bottom:0">📋 SÉANCE KINÉ POUR ${playerName}</div>
+    <div class="modal-title" style="margin-bottom:0">📋 SÉANCE SOIN POUR ${playerName}</div>
     <span onclick="closeModal()" style="font-size:22px;color:#9A7A70;cursor:pointer;padding:4px 8px">×</span>
   </div>
     <div class="field"><label>Titre</label><input class="input" id="ks-titre" placeholder="Ex: Séance de rééducation genou"/></div>
@@ -5696,7 +5859,7 @@ async function submitKineSession(){
   closeModal();
   showToast(`Séance envoyée à ${_kineSessionTargetName}`, 'success');
   // Notification push au joueur concerné uniquement
-  if(_kineSessionTargetId) sendPushToTeam(team.id, '🩺 ' + (team.name||'Rugby Perf'), 'Séance kiné : ' + titre + ' — ' + fmtFull(date), _kineSessionTargetId);
+  if(_kineSessionTargetId) sendPushToTeam(team.id, '🩺 ' + (team.name||'Rugby Perf'), 'Séance soin : ' + titre + ' — ' + fmtFull(date), _kineSessionTargetId);
 }
 
 // ── FORME ──────────────────────────────────────────────────────────────────
@@ -5827,10 +5990,11 @@ function renderKine(){
   if(hasKineRole) return renderKineSpace();
 
   const kineSess=sessions.filter(s=>s.type==="kine").sort((a,b)=>b.date.localeCompare(a.date));
-  let html=`<button onclick="openKineForm()" style="width:100%;background:${C.pink};color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:15px;letter-spacing:1px;margin-bottom:14px">🩺 AJOUTER SÉANCE KINÉ</button>`;
+  let html=`<button onclick="openKineForm()" style="width:100%;background:${C.pink};color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:15px;letter-spacing:1px;margin-bottom:14px">🩺 AJOUTER SÉANCE SOIN</button>`;
   html += renderInjuriesSection();
-  if(!kineSess.length) html+=`<div class="card" style="text-align:center;padding:40px"><div style="font-size:48px">🩺</div><div style="color:#9A7A70;margin-top:12px">Aucune séance kiné enregistrée.</div></div>`;
-  else { html+=`<div class="sec-title">Historique kiné (${kineSess.length})</div>`; kineSess.forEach(s=>{ html+=renderSessionCard(s); }); }
+  html += renderMedicalDocsSection();
+  if(!kineSess.length) html+=`<div class="card" style="text-align:center;padding:40px"><div style="font-size:48px">🩺</div><div style="color:#9A7A70;margin-top:12px">Aucune séance soin enregistrée.</div></div>`;
+  else { html+=`<div class="sec-title">Historique soins (${kineSess.length})</div>`; kineSess.forEach(s=>{ html+=renderSessionCard(s); }); }
 
   return html;
 }
@@ -8237,7 +8401,7 @@ function renderPortalScreen(){
       <div onclick="choosePortal('staff')" style="background:#FFFFFF;border:2px solid #D4841A33;border-radius:16px;padding:24px;cursor:pointer;text-align:center;transition:0.15s">
         <div style="font-size:36px">🏋️</div>
         <div style="font-size:16px;font-weight:800;color:#D4841A;margin-top:8px">Je suis staff</div>
-        <div style="font-size:12px;color:#9A7A70;margin-top:4px">Manager, préparateur, kiné</div>
+        <div style="font-size:12px;color:#9A7A70;margin-top:4px">Manager, préparateur, médical</div>
       </div>
     </div>
   </div>`;
