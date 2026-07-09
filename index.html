@@ -5581,14 +5581,14 @@ async function loadKineOverviewStats(teamId){
     const active = (inj||[]).filter(i => i.statut !== 'gueri');
     totalActive += active.length;
     totalSevere += active.filter(i => i.gravite === 'severe').length;
-    allInjuries = allInjuries.concat(active.map(i => ({...i, playerName: (p.nom||'')+' '+(p.nom_famille||'')})));
+    allInjuries = allInjuries.concat(active.map(i => ({...i, playerId: p.id, playerName: (p.nom||'')+' '+(p.nom_famille||'')})));
 
     // Détection des douleurs répétées : 2 jours ou plus avec courbatures "Fortes" (3) ou "Intenses" (4)
     // sur les 7 derniers jours, signalées via le bilan Forme quotidien — même sans blessure officiellement déclarée
     const {data: formeData} = await sb.from('forme').select('date, courbatures').eq('user_id', p.id).gte('date', sevenDaysAgo);
     const painDays = (formeData||[]).filter(f => f.courbatures >= 3);
     if(painDays.length >= 2){
-      painAlerts.push({playerName: (p.nom||'')+' '+(p.nom_famille||''), count: painDays.length, lastDate: painDays.sort((a,b)=>b.date.localeCompare(a.date))[0]?.date});
+      painAlerts.push({playerId: p.id, playerName: (p.nom||'')+' '+(p.nom_famille||''), count: painDays.length, lastDate: painDays.sort((a,b)=>b.date.localeCompare(a.date))[0]?.date});
     }
   }
 
@@ -5604,21 +5604,30 @@ async function loadKineOverviewStats(teamId){
       <div style="font-size:11px;color:#9A7A70;line-height:1.5;margin-bottom:8px">Ces joueurs ont signalé des courbatures/douleurs fortes au moins 2 fois sur les 7 derniers jours dans leur bilan Forme, sans avoir déclaré de blessure — un point de vigilance avant que ça ne s'aggrave.</div>
     </div>`;
     painAlerts.forEach(alert => {
-      html += `<div class="card" style="border-color:#F39C1244">
-        <div style="font-size:13px;font-weight:800">${alert.playerName}</div>
-        <div style="font-size:11px;color:#9A7A70;margin-top:2px">${alert.count} jour(s) avec douleurs fortes · Dernier signalement le ${fmt(alert.lastDate)}</div>
+      html += `<div class="card" style="border-color:#F39C1244;cursor:pointer" onclick="openKinePlayerDetail('${alert.playerId}','${alert.playerName.replace(/'/g,"\\'")}',${teamId})">
+        <div style="display:flex;justify-content:space-between;align-items:center">
+          <div>
+            <div style="font-size:13px;font-weight:800">${alert.playerName}</div>
+            <div style="font-size:11px;color:#9A7A70;margin-top:2px">${alert.count} jour(s) avec douleurs fortes · Dernier signalement le ${fmt(alert.lastDate)}</div>
+          </div>
+          <span style="color:#F39C12;font-size:18px">›</span>
+        </div>
       </div>`;
     });
   }
 
   if(allInjuries.length){
-    html += `<div class="sec-title">⚠️ Blessures actives</div>`;
-    allInjuries.sort((a,b)=>b.date_debut.localeCompare(a.date_debut)).forEach(inj => {
+    html += `<div class="sec-title">⚠️ Blessures actives</div>
+    <div style="font-size:11px;color:#9A7A70;margin-bottom:8px">Touche un joueur pour ouvrir sa fiche — c'est là que tu le déclares apte ou non apte.</div>`;
+    allInjuries.sort((a,b) => (a.gravite==='severe'?0:1) - (b.gravite==='severe'?0:1) || b.date_debut.localeCompare(a.date_debut)).forEach(inj => {
       const grav = GRAVITE_INFO[inj.gravite]; const stat = STATUT_INFO[inj.statut];
-      html += `<div class="card" style="border-color:${stat.color}33">
+      html += `<div class="card" style="border-color:${inj.gravite==='severe'?'#C0392B66':stat.color+'33'};cursor:pointer" onclick="openKinePlayerDetail('${inj.playerId}','${inj.playerName.replace(/'/g,"\\'")}',${teamId})">
         <div style="display:flex;justify-content:space-between;align-items:center">
           <div style="font-size:13px;font-weight:800">${inj.playerName}</div>
-          <span style="font-size:10px;font-weight:800;background:${stat.color}18;color:${stat.color};border-radius:20px;padding:3px 10px">${stat.label}</span>
+          <div style="display:flex;align-items:center;gap:6px">
+            <span style="font-size:10px;font-weight:800;background:${stat.color}18;color:${stat.color};border-radius:20px;padding:3px 10px">${stat.label}</span>
+            <span style="color:#9A7A70;font-size:16px">›</span>
+          </div>
         </div>
         <div style="font-size:12px;color:#1A0A0A;margin-top:4px">${grav.icon} ${inj.type}</div>
         <div style="font-size:11px;color:#9A7A70;margin-top:2px">Depuis le ${fmt(inj.date_debut)}${inj.duree_estimee_jours?` · ~${inj.duree_estimee_jours}j`:''}</div>
