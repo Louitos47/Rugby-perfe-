@@ -992,7 +992,9 @@ function openProfileModal(){
   </div>
   <div class="auth-field"><label>Prénom</label><input class="auth-input input" id="pm-nom" value="${p.nom||''}"/></div>
   <div class="auth-field"><label>Nom de famille</label><input class="auth-input input" id="pm-nomfamille" value="${p.nom_famille||''}"/></div>
-  <div class="auth-field"><label>Poste</label><select class="auth-input input" id="pm-poste">${POSITIONS.map(pos=>`<option ${p.poste===pos?'selected':''}>${pos}</option>`).join('')}</select></div>
+  ${myTeams.length && !myTeams.some(t => t.myRole === 'joueur')
+    ? `<div class="auth-field"><label>Fonction</label><input class="auth-input input" id="pm-poste" placeholder="Ex: Kiné, Ostéo, Entraîneur des avants, Manager général..." value="${p.poste||''}"/></div>`
+    : `<div class="auth-field"><label>Poste</label><select class="auth-input input" id="pm-poste">${POSITIONS.map(pos=>`<option ${p.poste===pos?'selected':''}>${pos}</option>`).join('')}</select></div>`}
   <div class="auth-field"><label>Équipe</label><input class="auth-input input" id="pm-equipe" placeholder="Nom de ton club" value="${p.equipe||''}"/></div>
   <div class="auth-field"><label>Niveau</label><select class="auth-input input" id="pm-niveau">${NIVEAUX.map(n=>`<option ${p.niveau===n?'selected':''}>${n}</option>`).join('')}</select></div>
   ${renderKineConsentToggle()}
