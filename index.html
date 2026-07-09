@@ -3652,10 +3652,18 @@ let _prepaTestSession = {}; // {player_id: {bronco_temps, squat_max, ...} ou nul
 let _prepaTestDate = '';
 let _prepaTestPlayers = [];
 
+let prepaCustomTests = []; // tests personnalisés de l'équipe du prépa
+
 function renderPrepaTests(){
   const team = getPrepaTeam();
   if(!team) return '';
-  let html = '<div class="sec-title">📊 Saisie collective de tests</div>' +
+  let html = '<div class="sec-title">🧪 Mes tests personnalisés</div>' +
+    '<div class="card" style="background:#D4841A08;border-color:#D4841A33">' +
+    '<div style="font-size:12px;color:#9A7A70;line-height:1.5;margin-bottom:10px">En plus des tests de base (Bronco, Squat, DC, Soulevé de terre), crée tes propres tests — ils apparaîtront dans la saisie collective et dans le suivi de tes joueurs.</div>' +
+    '<div id="prepa-custom-tests-list">Chargement...</div>' +
+    '<button onclick="openCustomTestModal()" style="width:100%;background:none;border:2px dashed #D4841A66;border-radius:10px;padding:10px;color:#D4841A;font-weight:700;font-size:13px;margin-top:8px">➕ Nouveau test</button>' +
+    '</div>' +
+    '<div class="sec-title" style="margin-top:16px">📊 Saisie collective de tests</div>' +
     '<div class="card" style="background:#8B1A1A08;border-color:#8B1A1A33">' +
     '<div style="font-size:12px;color:#9A7A70;line-height:1.5;margin-bottom:10px">Sélectionne une date et saisis les résultats de ton groupe. Clique sur la croix si un joueur est absent ou n\'a pas effectué le test.</div>' +
     '<div class="field"><label>Date de la session</label><input class="input" type="date" id="prepa-test-date" value="' + today() + '"/></div>' +
@@ -3664,8 +3672,77 @@ function renderPrepaTests(){
     '<div id="prepa-test-form"></div>' +
     '<div class="sec-title" style="margin-top:20px">Historique des tests</div>' +
     '<div id="prepa-tests-history">Chargement...</div>';
-  setTimeout(()=>loadPrepaTestsHistory(team.id), 0);
+  setTimeout(()=>{ loadPrepaCustomTests(team.id); loadPrepaTestsHistory(team.id); }, 0);
   return html;
+}
+
+async function loadPrepaCustomTests(teamId){
+  try {
+    const {data, error} = await sb.from('custom_tests').select('*').eq('team_id', teamId).order('created_at', {ascending:true});
+    if(error){ prepaCustomTests = []; const c = document.getElementById('prepa-custom-tests-list'); if(c) c.innerHTML = '<div style="font-size:11px;color:#C0392B">SQL "tests personnalisés" à exécuter dans Supabase.</div>'; return; }
+    prepaCustomTests = data || [];
+  } catch(e){ prepaCustomTests = []; }
+  const container = document.getElementById('prepa-custom-tests-list');
+  if(!container) return;
+  if(!prepaCustomTests.length){ container.innerHTML = '<div style="font-size:12px;color:#9A7A70;text-align:center;padding:6px">Aucun test personnalisé pour l\'instant.</div>'; return; }
+  container.innerHTML = prepaCustomTests.map(t => `<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid #E8D8D0">
+    <span style="font-size:16px">${t.icon||'🧪'}</span>
+    <div style="flex:1">
+      <div style="font-size:13px;font-weight:700">${escHtml(t.name)}</div>
+      <div style="font-size:10px;color:#9A7A70">${escHtml(t.unit||'')} · ${t.lower_is_better?'plus bas = mieux':'plus haut = mieux'}</div>
+    </div>
+    <button onclick="openCustomTestModal(${t.id})" style="background:none;border:none;color:#2E86AB;font-size:14px;padding:4px 6px">✏️</button>
+    <button onclick="deleteCustomTest(${t.id})" style="background:none;border:none;color:#C0392B;font-size:14px;padding:4px 6px">🗑️</button>
+  </div>`).join('');
+}
+
+function openCustomTestModal(id){
+  const t = id ? prepaCustomTests.find(x => x.id === id) : null;
+  const UNITS = ['kg','sec','cm','m','reps','pts'];
+  const html = `<div class="modal-title">🧪 ${t?'MODIFIER':'NOUVEAU'} TEST</div>
+  <div class="field"><label>Nom du test</label><input class="input" id="ct-name" placeholder="Ex: Tractions lestées, Yo-Yo test, 1000m..." value="${escHtml(t?.name||'')}"/></div>
+  <div class="grid2">
+    <div class="field"><label>Unité</label><select class="input" id="ct-unit">${UNITS.map(u=>`<option ${t?.unit===u?'selected':''}>${u}</option>`).join('')}</select></div>
+    <div class="field"><label>Icône (emoji)</label><input class="input" id="ct-icon" placeholder="🧪" maxlength="2" value="${t?.icon||''}"/></div>
+  </div>
+  <div class="field"><label>Sens de la performance</label>
+    <select class="input" id="ct-sens">
+      <option value="false" ${t&&!t.lower_is_better?'selected':''}>📈 Plus c'est haut, mieux c'est (kg, cm, reps...)</option>
+      <option value="true" ${t?.lower_is_better?'selected':''}>📉 Plus c'est bas, mieux c'est (temps, sprint...)</option>
+    </select>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button class="btn-save" onclick="saveCustomTest(${id||'null'})" style="background:#D4841A;color:#fff">${t?'ENREGISTRER':'CRÉER LE TEST'}</button>
+    <button class="btn-cancel" onclick="closeModal()">Annuler</button>
+  </div>`;
+  openModal(html);
+}
+
+async function saveCustomTest(id){
+  const team = getPrepaTeam();
+  const name = document.getElementById('ct-name')?.value.trim();
+  const unit = document.getElementById('ct-unit')?.value;
+  const icon = document.getElementById('ct-icon')?.value.trim() || '🧪';
+  const lower_is_better = document.getElementById('ct-sens')?.value === 'true';
+  if(!name){ showToast('Donne un nom au test', 'error'); return; }
+  let error;
+  if(id){
+    ({error} = await sb.from('custom_tests').update({name, unit, icon, lower_is_better}).eq('id', id));
+  } else {
+    ({error} = await sb.from('custom_tests').insert({team_id: team.id, created_by: currentUser.id, name, unit, icon, lower_is_better}));
+  }
+  if(error){ showToast('Erreur : '+error.message, 'error'); return; }
+  closeModal();
+  showToast(id ? 'Test modifié' : 'Test créé ✅', 'success');
+  loadPrepaCustomTests(team.id);
+}
+
+async function deleteCustomTest(id){
+  if(!confirm('Supprimer ce test et tous ses résultats ?')) return;
+  const {error} = await sb.from('custom_tests').delete().eq('id', id);
+  if(error){ showToast('Erreur : '+error.message, 'error'); return; }
+  showToast('Test supprimé', 'success');
+  loadPrepaCustomTests(getPrepaTeam()?.id);
 }
 
 async function loadPrepaTestSession(){
@@ -3719,6 +3796,16 @@ function renderPrepaTestForm(){
             '<span style="font-size:11px;color:#9A7A70">kg</span></div>';
         }
       });
+      // Tests personnalisés de l'équipe
+      prepaCustomTests.forEach(t => {
+        const key = 'ct_' + t.id;
+        const val = _prepaTestSession[p.id]?.[key] || '';
+        html += '<div style="display:flex;align-items:center;gap:6px;margin-bottom:6px">' +
+          '<span style="font-size:14px">' + (t.icon||'🧪') + '</span>' +
+          '<span style="font-size:12px;width:110px;color:#D4841A;font-weight:600">' + escHtml(t.name) + '</span>' +
+          '<input type="number" min="0" step="any" placeholder="' + escHtml(t.unit||'') + '" value="' + val + '" class="prepa-test-input" data-player="' + p.id + '" data-key="' + key + '" data-unit="custom" style="width:70px;padding:6px;border-radius:6px;border:1px solid #D4841A66;font-size:12px;text-align:center"/>' +
+          '<span style="font-size:11px;color:#9A7A70">' + escHtml(t.unit||'') + '</span></div>';
+      });
     }
     html += '</div>';
   });
@@ -3760,26 +3847,47 @@ async function savePrepaTestSession(){
   for(const [playerId, data] of Object.entries(_prepaTestSession)){
     if(data === null){ skipped++; continue; } // absent
 
-    const hasData = PREPA_TESTS.some(t => data[t.key]);
-    if(!hasData){ skipped++; continue; }
+    // Séparer les tests de base (colonnes athlete_tests) des tests personnalisés (ct_<id>)
+    const builtin = {}, customs = {};
+    Object.entries(data).forEach(([k, v]) => {
+      if(k.startsWith('ct_')) customs[k.slice(3)] = v;
+      else builtin[k] = v;
+    });
+    const hasBuiltin = PREPA_TESTS.some(t => builtin[t.key]);
+    const hasCustom = Object.values(customs).some(v => v !== null && v !== '' && v !== undefined);
+    if(!hasBuiltin && !hasCustom){ skipped++; continue; }
 
-    const row = {
-      user_id: playerId, date: _prepaTestDate,
-      saisie_par: currentUser.id, team_id: team.id,
-      ...data
-    };
-    // Essayer d'abord un update si une entrée existe déjà
-    const {data: existing} = await sb.from('athlete_tests').select('id').eq('user_id', playerId).eq('date', _prepaTestDate).eq('saisie_par', currentUser.id).single();
-    let error;
-    if(existing?.id){
-      const res = await sb.from('athlete_tests').update({...data, team_id: team.id}).eq('id', existing.id);
-      error = res.error;
-    } else {
-      const res = await sb.from('athlete_tests').insert(row);
-      error = res.error;
+    let ok = true;
+    if(hasBuiltin){
+      const row = {
+        user_id: playerId, date: _prepaTestDate,
+        saisie_par: currentUser.id, team_id: team.id,
+        ...builtin
+      };
+      const {data: existing} = await sb.from('athlete_tests').select('id').eq('user_id', playerId).eq('date', _prepaTestDate).eq('saisie_par', currentUser.id).single();
+      let error;
+      if(existing?.id){
+        const res = await sb.from('athlete_tests').update({...builtin, team_id: team.id}).eq('id', existing.id);
+        error = res.error;
+      } else {
+        const res = await sb.from('athlete_tests').insert(row);
+        error = res.error;
+      }
+      if(error){ ok = false; console.error('Erreur test joueur', playerId, error.message); }
     }
-    if(!error) saved++;
-    else console.error('Erreur test joueur', playerId, error.message);
+    // Résultats des tests personnalisés
+    for(const [testId, value] of Object.entries(customs)){
+      if(value === null || value === '' || value === undefined) continue;
+      const {data: existingR} = await sb.from('custom_test_results').select('id').eq('test_id', testId).eq('player_id', playerId).eq('date', _prepaTestDate).single();
+      let error;
+      if(existingR?.id){
+        ({error} = await sb.from('custom_test_results').update({value}).eq('id', existingR.id));
+      } else {
+        ({error} = await sb.from('custom_test_results').insert({test_id: parseInt(testId), team_id: team.id, player_id: playerId, saisie_par: currentUser.id, date: _prepaTestDate, value}));
+      }
+      if(error){ ok = false; console.error('Erreur test perso', playerId, error.message); }
+    }
+    if(ok) saved++;
   }
 
   showToast(saved + ' résultat(s) sauvegardé(s)' + (skipped ? ', ' + skipped + ' absent(s)' : ''), 'success');
@@ -3793,25 +3901,43 @@ async function loadPrepaTestsHistory(teamId){
 
   // Deux requêtes séparées
   const {data: testsRaw} = await sb.from('athlete_tests').select('*').eq('team_id', teamId).eq('saisie_par', currentUser.id).order('date', {ascending:false}).limit(20);
-  if(!testsRaw?.length){ container.innerHTML = '<div style="font-size:12px;color:#9A7A70;text-align:center;padding:12px">Aucun test saisi pour l\'instant.</div>'; return; }
+  let customResults = [];
+  try {
+    const {data: cr} = await sb.from('custom_test_results').select('*').eq('team_id', teamId).order('date', {ascending:false}).limit(100);
+    customResults = cr || [];
+  } catch(e){}
+  if(!testsRaw?.length && !customResults.length){ container.innerHTML = '<div style="font-size:12px;color:#9A7A70;text-align:center;padding:12px">Aucun test saisi pour l\'instant.</div>'; return; }
 
-  const pIds = [...new Set(testsRaw.map(t => t.user_id))];
+  const pIds = [...new Set([...(testsRaw||[]).map(t => t.user_id), ...customResults.map(r => r.player_id)])];
   const {data: profiles} = await sb.from('profiles').select('id, nom, nom_famille').in('id', pIds);
   const pMap = {}; (profiles||[]).forEach(p => pMap[p.id] = p);
+  const ctMap = {}; prepaCustomTests.forEach(t => ctMap[t.id] = t);
 
-  // Grouper par date
+  // Résultats personnalisés indexés par date+joueur
+  const customByDatePlayer = {};
+  customResults.forEach(r => {
+    const key = r.date + '|' + r.player_id;
+    if(!customByDatePlayer[key]) customByDatePlayer[key] = [];
+    const ct = ctMap[r.test_id];
+    customByDatePlayer[key].push((ct?.icon||'🧪') + ' ' + r.value + (ct?.unit||''));
+  });
+
+  // Grouper par date (tests de base + dates n'ayant que des tests persos)
   const byDate = {};
-  testsRaw.forEach(t => { if(!byDate[t.date]) byDate[t.date] = []; byDate[t.date].push(t); });
+  (testsRaw||[]).forEach(t => { if(!byDate[t.date]) byDate[t.date] = {}; byDate[t.date][t.user_id] = t; });
+  customResults.forEach(r => { if(!byDate[r.date]) byDate[r.date] = {}; if(!byDate[r.date][r.player_id]) byDate[r.date][r.player_id] = {user_id: r.player_id, date: r.date}; });
 
-  container.innerHTML = Object.entries(byDate).map(([date, tests]) =>
+  container.innerHTML = Object.entries(byDate).sort((a,b)=>b[0].localeCompare(a[0])).map(([date, players]) =>
     '<div class="card">' +
     '<div style="font-size:12px;font-weight:800;color:#8B1A1A;margin-bottom:8px">📊 Session du ' + fmt(date) + '</div>' +
-    tests.map(t => {
+    Object.values(players).map(t => {
       const p = pMap[t.user_id];
       const name = p ? (p.nom||'') + ' ' + (p.nom_famille||'') : 'Joueur';
-      const results = PREPA_TESTS.filter(pt => t[pt.key]).map(pt =>
+      const builtin = PREPA_TESTS.filter(pt => t[pt.key]).map(pt =>
         pt.isBronco ? pt.icon + ' ' + broncoFormat(t[pt.key]) : pt.icon + ' ' + t[pt.key] + pt.unit
-      ).join('  ');
+      );
+      const customs = customByDatePlayer[date + '|' + t.user_id] || [];
+      const results = [...builtin, ...customs].join('  ');
       return '<div style="font-size:12px;padding:4px 0;border-top:1px solid #F5EEE8">' +
         '<strong>' + name + '</strong> — ' + (results || 'Aucun résultat') + '</div>';
     }).join('') +
@@ -4152,6 +4278,7 @@ function renderAthlete(){
     </div>
 
     <button onclick="openTestModal()" style="width:100%;background:#8B1A1A;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:14px">+ NOUVEAU TEST</button>
+    <div id="my-custom-tests"></div>
   </div>`;
 
   // Historique des tests
@@ -4192,7 +4319,45 @@ function renderAthlete(){
   }
   html += `<button onclick="openGoalModal()" style="width:100%;background:#F5EEE8;border:2px dashed #8B1A1A44;border-radius:10px;padding:12px;color:#8B1A1A;font-weight:700;font-size:13px;margin-top:4px">➕ Fixer un objectif</button>`;
 
+  setTimeout(loadMyCustomTests, 0);
   return html;
+}
+
+// Résultats des tests personnalisés créés par le prépa (joueurs en équipe)
+async function loadMyCustomTests(){
+  const container = document.getElementById('my-custom-tests');
+  if(!container || !myTeams.some(t => t.myRole === 'joueur')) return;
+  try {
+    const {data: results} = await sb.from('custom_test_results').select('*').eq('player_id', currentUser.id).order('date', {ascending:false}).limit(50);
+    if(!results?.length) return;
+    const testIds = [...new Set(results.map(r => r.test_id))];
+    const {data: tests} = await sb.from('custom_tests').select('*').in('id', testIds);
+    const tMap = {}; (tests||[]).forEach(t => tMap[t.id] = t);
+    // Dernière valeur + record par test
+    const byTest = {};
+    results.forEach(r => {
+      if(!byTest[r.test_id]) byTest[r.test_id] = [];
+      byTest[r.test_id].push(r);
+    });
+    let html = `<div style="font-size:12px;color:#9A7A70;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin:16px 0 10px">🧪 Tests du préparateur</div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">`;
+    Object.entries(byTest).forEach(([tid, list]) => {
+      const t = tMap[tid];
+      if(!t) return;
+      const sorted = [...list].sort((a,b)=>b.date.localeCompare(a.date));
+      const last = sorted[0];
+      const best = t.lower_is_better
+        ? Math.min(...list.map(r=>parseFloat(r.value)))
+        : Math.max(...list.map(r=>parseFloat(r.value)));
+      html += `<div style="background:#F5EEE8;border-radius:12px;padding:12px;text-align:center">
+        <div style="font-size:11px;color:#9A7A70;font-weight:700;margin-bottom:4px">${t.icon||'🧪'} ${escHtml(t.name).toUpperCase()}</div>
+        <div style="font-size:20px;font-weight:900;color:#D4841A">${last.value}<span style="font-size:11px">${escHtml(t.unit||'')}</span></div>
+        <div style="font-size:10px;color:#9A7A70;margin-top:2px">${fmt(last.date)}${list.length>1?` · record ${best}${escHtml(t.unit||'')}`:''}</div>
+      </div>`;
+    });
+    html += `</div>`;
+    container.innerHTML = html;
+  } catch(e){}
 }
 
 const GOAL_LABELS = {
@@ -5459,8 +5624,10 @@ function medicalFileRow(f, senderLabel){
   </div>`;
 }
 
-// Section côté joueur (onglet Médical)
+// Section côté joueur (onglet Médical) — réservée aux joueurs rattachés à une
+// équipe : sans équipe, il n'y a aucun staff médical pour recevoir les documents
 function renderMedicalDocsSection(){
+  if(!myTeams.some(t => t.myRole === 'joueur')) return '';
   setTimeout(loadMyMedicalFiles, 0);
   return `<div class="sec-title">📁 Mes documents médicaux</div>
   <button onclick="openSendMedicalDoc()" style="width:100%;background:#C0185A18;border:1px dashed #C0185A66;border-radius:10px;padding:11px;color:#C0185A;font-weight:700;font-size:13px;margin-bottom:10px">📷 Envoyer une photo / un document au médical</button>
