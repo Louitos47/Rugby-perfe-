@@ -969,7 +969,7 @@ function renderMainApp(){
           : `<span style="font-size:16px">👤</span>`}
         <span style="font-size:12px;color:#FFFFFF;font-weight:600">${userProfile?.nom||''}</span>
       </button>
-      ${(isPureKine() || isPurePrepa() || isPureManager()) ? '' : `<div style="display:flex;gap:6px"><button class="btn-add" onclick="openPlanifierSession()" style="background:#2E86AB;font-size:11px;padding:7px 10px">📋 Planifier</button><button class="btn-add" onclick="openDemarrerSession()" style="font-size:11px;padding:7px 10px">▶ Séance</button></div>`}
+      ${(isPureKine() || isPurePrepa() || isPureManager() || isPureCoach()) ? '' : `<div style="display:flex;gap:6px"><button class="btn-add" onclick="openPlanifierSession()" style="background:#2E86AB;font-size:11px;padding:7px 10px">📋 Planifier</button><button class="btn-add" onclick="openDemarrerSession()" style="font-size:11px;padding:7px 10px">▶ Séance</button></div>`}
     </div>
   </div>
   <div class="content" id="content"></div>
