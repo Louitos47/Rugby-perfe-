@@ -4785,6 +4785,12 @@ async function saveTeamEventBilan(){
   teamEventBilans[_bilanEventId] = row;
   closeModal(); render();
   showToast('Bilan enregistré ✓', 'success');
+
+  // Signal d'alerte pour le staff médical : joueur épuisé après un match/entraînement
+  if(_bilanRessenti === 0){
+    medicalAlertOnce('bilan_' + _bilanEventId,
+      userName() + ' se déclare épuisé 😴 dans son bilan ' + (_bilanEventType === 'match' ? 'de match' : "d'entraînement"));
+  }
 }
 
 // ── ANNONCES DU MANAGER (côté joueur) ────────────────────────────────────────
@@ -6152,6 +6158,29 @@ function renderForme(){
 }
 
 
+// ── ALERTES MÉDICALES ─────────────────────────────────────────────────────────
+// Prévient le staff médical des équipes du joueur quand un signal inquiétant
+// apparaît dans le bilan du jour ou un bilan d'après-match.
+async function alertMedicalStaff(message){
+  myTeams.filter(t => t.myRole === 'joueur').forEach(async t => {
+    try {
+      const {data: staff} = await sb.from('team_members').select('user_id').eq('team_id', t.id).eq('role', 'kine');
+      const ids = [...new Set((staff||[]).map(s => s.user_id))].filter(uid => uid !== currentUser.id);
+      if(ids.length) sendPushToTeam(t.id, '⚠️ Alerte médicale — ' + t.name, message, ids);
+    } catch(e){}
+  });
+}
+
+// Une seule alerte par signal et par jour (évite le spam quand le joueur ajuste sa saisie)
+function medicalAlertOnce(key, message){
+  try {
+    const guard = 'rp_med_alert_' + key + '_' + today();
+    if(localStorage.getItem(guard)) return;
+    localStorage.setItem(guard, '1');
+  } catch(e){}
+  alertMedicalStaff(message);
+}
+
 async function saveForme(key, val){
   if(!currentUser) return;
   const today_str = today();
@@ -6166,6 +6195,15 @@ async function saveForme(key, val){
   }
   // Confirmation visuelle que la sauvegarde a bien eu lieu
   showToast('Bilan de forme sauvegardé ✓', 'success');
+
+  // Signaux d'alerte pour le staff médical
+  if(key === 'courbatures' && val >= 4){
+    medicalAlertOnce('courbatures', userName() + ' signale des douleurs fortes (' + val + '/5) dans son bilan du jour');
+  } else if(key === 'fatigue' && val <= 1){
+    medicalAlertOnce('fatigue', userName() + ' signale une énergie très basse (batterie vide 🪫) dans son bilan du jour');
+  } else if(key === 'sommeil' && val <= 1){
+    medicalAlertOnce('sommeil', userName() + ' signale un très mauvais sommeil dans son bilan du jour');
+  }
   render();
 }
 
@@ -8653,6 +8691,8 @@ function notifsGranted(){
 }
 
 function shouldShowNotifTuto(){
+  // Les notifications ne concernent que la vie d'équipe — inutile pour un joueur solo
+  if(!myTeams.length) return false;
   if(notifsGranted()) return false;
   try {
     const dis = parseInt(localStorage.getItem('rp_notif_tuto_dismissed')||'0');
