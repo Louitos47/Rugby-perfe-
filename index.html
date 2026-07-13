@@ -2183,28 +2183,30 @@ async function loadPrepaPlayers(teamId){
   // Récupère UNIQUEMENT le statut apte_au_jeu, jamais le détail de la blessure
   // (type, gravité) — la policy RLS protège déjà ça côté base, mais on ne
   // sélectionne explicitement que les colonnes nécessaires côté requête aussi
+  // Aptitude au jeu : même source que le médical (team_members.apte_au_jeu)
   let aptStatusByPlayer = {};
   let injuriesByPlayer = {};
   try {
-    const {data: injStatus} = await sb.from('injuries').select('user_id, apte_au_jeu, statut, type').neq('statut', 'gueri');
+    const {data: aptData} = await sb.from('team_members').select('user_id, apte_au_jeu').eq('team_id', teamId);
+    (aptData||[]).forEach(a => { if(a.apte_au_jeu === false) aptStatusByPlayer[a.user_id] = false; });
+  } catch(e){}
+  try {
+    const {data: injStatus} = await sb.from('injuries').select('user_id, statut, type').neq('statut', 'gueri');
     (injStatus||[]).forEach(i => {
-      if(!aptStatusByPlayer[i.user_id]) aptStatusByPlayer[i.user_id] = i.apte_au_jeu;
-      else if(!i.apte_au_jeu) aptStatusByPlayer[i.user_id] = false; // une seule blessure non-apte suffit
       if(i.type){ if(!injuriesByPlayer[i.user_id]) injuriesByPlayer[i.user_id] = []; injuriesByPlayer[i.user_id].push(i.type); }
     });
   } catch(e){}
 
   container.innerHTML = prepaTeamPlayers.map(p => {
-    const hasInjuryFlag = p.id in aptStatusByPlayer;
-    const isApte = aptStatusByPlayer[p.id];
+    const isApte = aptStatusByPlayer[p.id] !== false;
     const injList = injuriesByPlayer[p.id] || [];
-    return `<div class="card" style="display:flex;justify-content:space-between;align-items:center">
+    return `<div class="card" style="display:flex;justify-content:space-between;align-items:center;border-color:${isApte?'#E8D8D0':'#C0392B44'}">
     <div>
       <div style="font-size:14px;font-weight:700">${p.nom||''} ${p.nom_famille||''}</div>
       <div style="font-size:11px;color:#9A7A70">${p.poste||'Poste non renseigné'}</div>
       ${injList.length ? `<div style="font-size:11px;color:#C0392B;margin-top:2px">🩹 ${injList.map(escHtml).join(' · ')}</div>` : ''}
     </div>
-    ${hasInjuryFlag ? `<span style="font-size:10px;font-weight:800;border-radius:20px;padding:3px 10px;background:${isApte?'#1A8C6E18':'#C0392B18'};color:${isApte?'#1A8C6E':'#C0392B'}">${isApte?'✓ Apte':'⚠️ Non apte'}</span>` : ''}
+    <span style="font-size:10px;font-weight:800;border-radius:20px;padding:3px 10px;background:${isApte?'#1A8C6E18':'#C0392B18'};color:${isApte?'#1A8C6E':'#C0392B'}">${isApte?'✓ Apte':'⚠️ Non apte'}</span>
   </div>`;
   }).join('');
 }
@@ -2439,14 +2441,17 @@ async function loadManagerOverview(teamId){
   const {data: profiles} = await sb.from('profiles').select('id, nom, nom_famille, poste').in('id', userIds);
   const playerList = profiles || [];
 
-  // Statut apte au jeu + blessures actives (visibles par le staff)
+  // Aptitude au jeu : même source que le médical (team_members.apte_au_jeu,
+  // c'est ce que son bouton apte/non apte modifie) + blessures actives en détail
   let aptStatusByPlayer = {};
   let mgrInjuriesByPlayer = {};
   try {
-    const {data: injStatus} = await sb.from('injuries').select('user_id, apte_au_jeu, statut, type').neq('statut', 'gueri');
+    const {data: aptData} = await sb.from('team_members').select('user_id, apte_au_jeu').eq('team_id', teamId);
+    (aptData||[]).forEach(a => { if(a.apte_au_jeu === false) aptStatusByPlayer[a.user_id] = false; });
+  } catch(e){}
+  try {
+    const {data: injStatus} = await sb.from('injuries').select('user_id, statut, type').neq('statut', 'gueri');
     (injStatus||[]).forEach(i => {
-      if(!aptStatusByPlayer[i.user_id]) aptStatusByPlayer[i.user_id] = i.apte_au_jeu;
-      else if(!i.apte_au_jeu) aptStatusByPlayer[i.user_id] = false;
       if(i.type){ if(!mgrInjuriesByPlayer[i.user_id]) mgrInjuriesByPlayer[i.user_id] = []; mgrInjuriesByPlayer[i.user_id].push(i.type); }
     });
   } catch(e){}
@@ -2500,16 +2505,15 @@ async function loadManagerOverview(teamId){
 
   html += `<div class="sec-title">Joueurs</div>`;
   playerList.forEach(p => {
-    const hasFlag = p.id in aptStatusByPlayer;
-    const isApte = aptStatusByPlayer[p.id];
+    const isApte = aptStatusByPlayer[p.id] !== false;
     const injList = mgrInjuriesByPlayer[p.id] || [];
-    html += `<div class="card" style="display:flex;justify-content:space-between;align-items:center">
+    html += `<div class="card" style="display:flex;justify-content:space-between;align-items:center;border-color:${isApte?'#E8D8D0':'#C0392B44'}">
       <div>
         <div style="font-size:14px;font-weight:700">${p.nom||''} ${p.nom_famille||''}</div>
         <div style="font-size:11px;color:#9A7A70">${p.poste||'Poste non renseigné'}</div>
         ${injList.length ? `<div style="font-size:11px;color:#C0392B;margin-top:2px">🩹 ${injList.map(escHtml).join(' · ')}</div>` : ''}
       </div>
-      ${hasFlag ? `<span style="font-size:10px;font-weight:800;border-radius:20px;padding:3px 10px;background:${isApte?'#1A8C6E18':'#C0392B18'};color:${isApte?'#1A8C6E':'#C0392B'}">${isApte?'✓ Apte':'⚠️ Non apte'}</span>` : ''}
+      <span style="font-size:10px;font-weight:800;border-radius:20px;padding:3px 10px;background:${isApte?'#1A8C6E18':'#C0392B18'};color:${isApte?'#1A8C6E':'#C0392B'}">${isApte?'✓ Apte':'⚠️ Non apte'}</span>
     </div>`;
   });
 
