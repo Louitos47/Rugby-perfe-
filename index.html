@@ -6785,6 +6785,8 @@ function openSessionForm(initial=null){
   sessionSets = {};
   sessionBlocs = [];
   sessionExTempo = {};
+  _collapsedEx = new Set();
+  _collapsedBlocs = new Set();
   if(initial?.type==='muscu'){
     const savedBlocs = initial?.blocs || initial?.data?.blocs;
     if(savedBlocs?.length) sessionBlocs = JSON.parse(JSON.stringify(savedBlocs));
@@ -7377,36 +7379,53 @@ function renderMuscuForm(bycat, selected){
     selected.forEach(exLabel => {
       const sets = sessionSets[exLabel] || [{kg:'',reps:''}];
       const key = exJsKey(exLabel);
+      const collapsed = _collapsedEx.has(exLabel);
       html += `<div style="background:#F5EEE8;border:1px solid #E8D8D0;border-radius:10px;padding:12px;margin-bottom:10px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;flex-wrap:wrap;gap:4px">
-          <div style="font-weight:700;font-size:13px;color:#1A0A0A">💪 ${exLabel}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${collapsed?'0':'10px'};flex-wrap:wrap;gap:4px">
+          <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+            ${collapseChevron(collapsed, `toggleExCollapse('${key}')`)}
+            <div style="min-width:0">
+              <div style="font-weight:700;font-size:13px;color:#1A0A0A;cursor:pointer" onclick="toggleExCollapse('${key}')">💪 ${exLabel}</div>
+              ${collapsed ? exCollapsedSummary(exLabel) : ''}
+            </div>
+          </div>
           <div style="display:flex;gap:4px;align-items:center;flex-wrap:wrap">
-            ${renderBlocButtons(exLabel)}
+            ${collapsed ? '' : renderBlocButtons(exLabel)}
             <button onclick="removeExFromSession('${key}')" style="color:#C0392B;font-size:18px;background:none;border:none;cursor:pointer">×</button>
           </div>
         </div>
+        ${collapsed ? '' : `
         ${renderExOptionsBar(exLabel)}
         ${renderMuscuSetHeader(exLabel)}
         ${sets.map((set,i) => renderMuscuSetRow(exLabel, set, i)).join('')}
-        <button onclick="addSet('${key}')" style="width:100%;background:none;border:1px dashed #E8D8D0;border-radius:8px;padding:7px;color:#8B1A1A;font-size:12px;font-weight:700;margin-top:4px">+ Série</button>
+        <button onclick="addSet('${key}')" style="width:100%;background:none;border:1px dashed #E8D8D0;border-radius:8px;padding:7px;color:#8B1A1A;font-size:12px;font-weight:700;margin-top:4px">+ Série</button>`}
       </div>`;
     });
   }
   // Affichage des blocs avec leurs exercices
   if(sessionBlocs.length > 0){
     sessionBlocs.forEach((bloc, blocIdx) => {
+      const blocCollapsed = _collapsedBlocs.has(blocIdx);
       html += `<div style="background:#8B1A1A08;border:2px solid #8B1A1A33;border-radius:14px;padding:14px;margin-bottom:12px">
-        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
-          <div style="font-size:13px;font-weight:800;color:#8B1A1A">📦 ${bloc.name}</div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${blocCollapsed?'0':'10px'}">
+          <div style="display:flex;align-items:center;gap:8px">
+            ${collapseChevron(blocCollapsed, `toggleBlocCollapse(${blocIdx})`)}
+            <div style="cursor:pointer" onclick="toggleBlocCollapse(${blocIdx})">
+              <div style="font-size:13px;font-weight:800;color:#8B1A1A">📦 ${bloc.name}</div>
+              ${blocCollapsed ? `<div style="font-size:11px;color:#9A7A70;margin-top:1px">${bloc.exercises.length} exercice${bloc.exercises.length>1?'s':''} · ${bloc.exercises.map(escHtml).join(' · ')||'vide'}</div>` : ''}
+            </div>
+          </div>
           <button onclick="removeBloc(${blocIdx})" style="background:none;border:none;color:#C0392B;font-size:12px;cursor:pointer">Supprimer</button>
         </div>`;
-      if(bloc.exercises.length === 0){
-        html += `<div style="font-size:11px;color:#9A7A70;text-align:center;padding:8px">Glisse des exercices ici avec le bouton → Bloc</div>`;
-      } else {
-        bloc.exercises.forEach(exLabel => {
-          const sets = sessionSets[exLabel] || [{kg:'',reps:''}];
-          html += renderExerciceBlock(exLabel, sets, blocIdx);
-        });
+      if(!blocCollapsed){
+        if(bloc.exercises.length === 0){
+          html += `<div style="font-size:11px;color:#9A7A70;text-align:center;padding:8px">Glisse des exercices ici avec le bouton → Bloc</div>`;
+        } else {
+          bloc.exercises.forEach(exLabel => {
+            const sets = sessionSets[exLabel] || [{kg:'',reps:''}];
+            html += renderExerciceBlock(exLabel, sets, blocIdx);
+          });
+        }
       }
       html += `</div>`;
     });
@@ -7425,15 +7444,23 @@ function renderExerciceBlock(exLabel, sets, blocIdx){
   const ex = getAllExercises().find(e => e.label === exLabel);
   const icon = ex?.icon || '💪';
   const key = exJsKey(exLabel);
+  const collapsed = _collapsedEx.has(exLabel);
   let html = `<div style="background:#FFFFFF;border:1px solid #E8D8D0;border-radius:10px;padding:12px;margin-bottom:8px">
-    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
-      <div style="font-weight:700;font-size:13px">${icon} ${exLabel}</div>
-      <button onclick="removeFromBloc('${key}',${blocIdx})" style="color:#C0392B;font-size:11px;background:none;border:none;cursor:pointer">× Retirer du bloc</button>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:${collapsed?'0':'8px'}">
+      <div style="display:flex;align-items:center;gap:8px;flex:1;min-width:0">
+        ${collapseChevron(collapsed, `toggleExCollapse('${key}')`)}
+        <div style="min-width:0">
+          <div style="font-weight:700;font-size:13px;cursor:pointer" onclick="toggleExCollapse('${key}')">${icon} ${exLabel}</div>
+          ${collapsed ? exCollapsedSummary(exLabel) : ''}
+        </div>
+      </div>
+      <button onclick="removeFromBloc('${key}',${blocIdx})" style="color:#C0392B;font-size:11px;background:none;border:none;cursor:pointer;flex-shrink:0">× Retirer du bloc</button>
     </div>
+    ${collapsed ? '' : `
     ${renderExOptionsBar(exLabel)}
     ${renderMuscuSetHeader(exLabel)}
     ${sets.map((set,i) => renderMuscuSetRow(exLabel, set, i)).join('')}
-    <button onclick="addSet('${key}')" style="width:100%;background:none;border:1px dashed #E8D8D0;border-radius:8px;padding:7px;color:#8B1A1A;font-size:12px;font-weight:700;margin-top:4px">+ Série</button>
+    <button onclick="addSet('${key}')" style="width:100%;background:none;border:1px dashed #E8D8D0;border-radius:8px;padding:7px;color:#8B1A1A;font-size:12px;font-weight:700;margin-top:4px">+ Série</button>`}
   </div>`;
   return html;
 }
@@ -7453,6 +7480,39 @@ function removeExFromSession(val){
 }
 
 // ── SÉRIES MUSCU : rendu unifié (formulaire séance + blocs) ──────────────────
+// Repli/dépli des fiches exercices et des blocs dans le formulaire de séance
+let _collapsedEx = new Set();
+let _collapsedBlocs = new Set();
+
+function toggleExCollapse(exLabel){
+  if(_collapsedEx.has(exLabel)) _collapsedEx.delete(exLabel);
+  else _collapsedEx.add(exLabel);
+  renderSessionForm();
+}
+
+function toggleBlocCollapse(idx){
+  if(_collapsedBlocs.has(idx)) _collapsedBlocs.delete(idx);
+  else _collapsedBlocs.add(idx);
+  renderSessionForm();
+}
+
+// Bouton flèche de repli (▼ ouvert / ▶ replié)
+function collapseChevron(collapsed, onclick){
+  return `<button onclick="${onclick}" style="background:#F5EEE8;border:1px solid #E8D8D0;border-radius:8px;width:28px;height:28px;font-size:12px;color:#8B1A1A;cursor:pointer;flex-shrink:0">${collapsed?'▶':'▼'}</button>`;
+}
+
+// Résumé compact d'un exercice replié : "3 séries · PDC · tempo 3-1-2"
+function exCollapsedSummary(exLabel){
+  const sets = sessionSets[exLabel] || [];
+  const m = exMode(exLabel);
+  const parts = [sets.length + ' série' + (sets.length>1?'s':'')];
+  if(m.isPdc) parts.push('PDC');
+  if(m.isTimed) parts.push('secondes');
+  if(sessionExTempo[exLabel]) parts.push('tempo ' + sessionExTempo[exLabel]);
+  const detail = fmtMuscuSets(sets);
+  return `<div style="font-size:11px;color:#9A7A70;margin-top:2px">${detail || parts.join(' · ')}</div>`;
+}
+
 function fmtOneSet(st){
   // "80kg × 8" · "PDC × 12" · "PDC × 45 sec" · "60kg × 30 sec"
   const charge = st.isPdc ? 'PDC' : (st.kg ? st.kg+'kg' : '');
@@ -7614,6 +7674,8 @@ function demarrerSeancePlanifiee(sessionId){
   sessionSets = {};
   sessionBlocs = [];
   sessionExTempo = {};
+  _collapsedEx = new Set();
+  _collapsedBlocs = new Set();
   if(s.type === 'muscu' && s.muscuSets?.length){
     s.muscuSets.forEach(ms => {
       sessionSets[ms.exLabel] = ms.sets || [{kg:'',reps:''}];
