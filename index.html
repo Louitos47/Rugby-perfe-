@@ -2241,7 +2241,8 @@ async function loadPrepaProposedSessions(teamId){
           <div style="font-size:14px;font-weight:800">${sess.titre}</div>
           <div style="font-size:11px;color:#9A7A70;margin-top:2px">${fmt(sess.date)} · Envoyée à ${targetLabel}</div>
           <div style="font-size:11px;color:#1A8C6E;margin-top:4px">${count||0} séance(s) validée(s) par les joueurs</div>
-          ${sess.pdf_url?`<a href="${sess.pdf_url}" target="_blank" style="font-size:11px;color:#2E86AB;margin-top:4px;display:inline-block">📎 Voir le PDF joint</a>`:''}
+          ${sess.pdf_url?`<a href="${sess.pdf_url}" target="_blank" style="font-size:11px;color:#2E86AB;margin-top:4px;display:inline-block;margin-right:10px">📎 Voir le PDF joint</a>`:''}
+          ${sess.video_url?`<a href="${sess.video_url}" target="_blank" style="font-size:11px;color:#C0392B;margin-top:4px;display:inline-block">▶️ Voir la vidéo</a>`:''}
         </div>
         <button onclick="duplicatePrepaSession(${sess.id})" style="background:#F5EEE8;border:1px solid #E8D8D0;border-radius:8px;padding:7px 12px;font-size:11px;font-weight:700;color:#D4841A;white-space:nowrap">📋 Dupliquer</button>
       </div>
@@ -4119,6 +4120,9 @@ function renderPrepaSessionFormFields(){
     <div class="field"><label>Fichier PDF</label><input class="input" type="file" id="ps-pdf-file" accept="application/pdf"/></div>`;
   }
 
+  // Lien vidéo optionnel, quel que soit le format (démo d'exercice, correction technique...)
+  html += `<div class="field"><label>▶️ Lien vidéo (YouTube, WeTransfer... — optionnel)</label><input class="input" id="ps-video" placeholder="https://..."/></div>`;
+
   container.innerHTML = html;
 }
 
@@ -4170,9 +4174,10 @@ async function submitPrepaSession(){
     description = lignes.join('\n') + (description ? '\n\n' + description : '');
   }
 
+  const video_url = document.getElementById('ps-video')?.value.trim() || null;
   const row = {
     team_id: team.id, created_by: currentUser.id, type: 'muscu', titre, description, date,
-    pdf_url, exercices, target_type: _prepaTargetType, target_ids: _prepaTargetSelection
+    pdf_url, video_url, exercices, target_type: _prepaTargetType, target_ids: _prepaTargetSelection
   };
   const {data, error} = await sb.from('proposed_sessions').insert(row).select().single();
   if(error){ showToast('Erreur envoi séance : '+error.message, 'error'); return; }
@@ -4844,7 +4849,8 @@ function renderProposedSessionsInbox(){
         </div>
       </div>
       ${sess.description?`<div style="font-size:12px;color:#1A0A0A;margin-top:8px;line-height:1.6;white-space:pre-line">${sess.description}</div>`:''}
-      ${sess.pdf_url?`<a href="${sess.pdf_url}" target="_blank" style="font-size:12px;color:#2E86AB;margin-top:6px;display:inline-block">📎 Voir le PDF joint</a>`:''}
+      ${sess.pdf_url?`<a href="${sess.pdf_url}" target="_blank" style="font-size:12px;color:#2E86AB;margin-top:6px;display:inline-block;margin-right:12px">📎 Voir le PDF joint</a>`:''}
+      ${sess.video_url?`<a href="${sess.video_url}" target="_blank" style="font-size:12px;color:#C0392B;margin-top:6px;display:inline-block;font-weight:700">▶️ Voir la vidéo</a>`:''}
       <div style="display:flex;gap:8px;margin-top:10px">
         <button onclick="acceptProposedSession(${sess.id})" style="flex:1;background:#1A8C6E;color:#fff;border:none;border-radius:8px;padding:10px;font-weight:700;font-size:12px">✓ Accepter</button>
         <button onclick="ignoreProposedSession(${sess.id})" style="flex:1;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:8px;padding:10px;font-weight:700;font-size:12px;color:#9A7A70">Ignorer</button>
@@ -4884,7 +4890,8 @@ async function acceptProposedSession(id){
     id: Date.now(), type: sess.type, date: sess.date, heure: '', duree: sess.duree||0,
     ressenti: 2, source: 'club', notes: sess.description||'', focus: sess.titre,
     muscuSets: muscuSets.length ? muscuSets : undefined,
-    pdf_url: sess.pdf_url || undefined
+    pdf_url: sess.pdf_url || undefined,
+    video_url: sess.video_url || undefined
   };
   const newId = await saveSession(session);
   if(newId) session.id = newId;
@@ -5618,6 +5625,9 @@ async function saveInjury(id){
 
 // ── DOSSIER MÉDICAL PARTAGÉ (photos / PDF entre joueur et staff médical) ─────
 async function openMedicalFile(path){
+  // Les liens (vidéo YouTube, WeTransfer...) s'ouvrent directement ;
+  // les fichiers stockés passent par un lien signé temporaire
+  if(/^https?:\/\//.test(path)){ window.open(path, '_blank'); return; }
   const {data, error} = await sb.storage.from('medical').createSignedUrl(path, 3600);
   if(error || !data?.signedUrl){ showToast('Impossible d\'ouvrir le document : ' + (error?.message||''), 'error'); return; }
   window.open(data.signedUrl, '_blank');
@@ -5625,7 +5635,7 @@ async function openMedicalFile(path){
 
 function medicalFileRow(f, senderLabel){
   return `<div class="card" style="display:flex;align-items:center;gap:10px;padding:12px">
-    <span style="font-size:20px">${f.file_type==='pdf'?'📄':'📷'}</span>
+    <span style="font-size:20px">${f.file_type==='pdf'?'📄':f.file_type==='link'?'▶️':'📷'}</span>
     <div style="flex:1">
       <div style="font-size:13px;font-weight:700">${escHtml(f.note||'Document')}</div>
       <div style="font-size:11px;color:#9A7A70">${escHtml(senderLabel)} · ${fmt(f.created_at.split('T')[0])}</div>
@@ -5660,7 +5670,8 @@ function openSendMedicalDoc(playerId, playerName, teamId){
   const html = `<div class="modal-title">📎 ENVOYER UN DOCUMENT${toPlayer?' — '+playerName.toUpperCase():''}</div>
   <div style="font-size:11px;color:#9A7A70;margin-bottom:12px;line-height:1.5">${toPlayer?'Le joueur recevra une notification et retrouvera le document dans son onglet Médical.':'Ton staff médical recevra une notification. Photo de blessure, ordonnance, compte-rendu...'}</div>
   <div class="field"><label>Photo ou PDF</label><input class="input" type="file" id="md-file" accept="image/*,application/pdf"/></div>
-  <div class="field"><label>Note (optionnel)</label><input class="input" id="md-note" placeholder="Ex: Photo du genou, ordonnance IRM..."/></div>
+  <div class="field"><label>▶️ OU un lien vidéo (YouTube, WeTransfer...)</label><input class="input" id="md-link" placeholder="https://..."/></div>
+  <div class="field"><label>Note (optionnel)</label><input class="input" id="md-note" placeholder="Ex: Photo du genou, exercice de rééducation en vidéo..."/></div>
   <div style="display:flex;gap:8px">
     <button class="btn-save" onclick="submitMedicalDoc(${target})" style="background:#C0185A;color:#fff">ENVOYER</button>
     <button class="btn-cancel" onclick="closeModal()">Annuler</button>
@@ -5670,15 +5681,24 @@ function openSendMedicalDoc(playerId, playerName, teamId){
 
 async function submitMedicalDoc(playerId, playerName, teamId){
   const file = document.getElementById('md-file')?.files?.[0];
+  const link = document.getElementById('md-link')?.value.trim() || '';
   const note = document.getElementById('md-note')?.value.trim() || '';
-  if(!file){ showToast('Choisis un fichier', 'error'); return; }
-  const isPdf = file.type === 'application/pdf';
+  if(!file && !link){ showToast('Choisis un fichier ou colle un lien', 'error'); return; }
   const targetPlayer = playerId || currentUser.id;
   const tId = teamId || myTeams.find(t => t.myRole === 'joueur')?.id || myTeams[0]?.id || null;
-  const path = targetPlayer + '/' + Date.now() + '_' + file.name;
-  const {error: upErr} = await sb.storage.from('medical').upload(path, file);
-  if(upErr){ showToast('Erreur envoi : ' + upErr.message, 'error'); return; }
-  const {error} = await sb.from('medical_files').insert({team_id: tId, player_id: targetPlayer, sender_id: currentUser.id, file_path: path, file_type: isPdf ? 'pdf' : 'photo', note});
+  let path, fileType;
+  if(file){
+    const isPdf = file.type === 'application/pdf';
+    path = targetPlayer + '/' + Date.now() + '_' + file.name;
+    const {error: upErr} = await sb.storage.from('medical').upload(path, file);
+    if(upErr){ showToast('Erreur envoi : ' + upErr.message, 'error'); return; }
+    fileType = isPdf ? 'pdf' : 'photo';
+  } else {
+    // Lien vidéo : on stocke l'URL directement, rien à uploader
+    path = /^https?:\/\//.test(link) ? link : 'https://' + link;
+    fileType = 'link';
+  }
+  const {error} = await sb.from('medical_files').insert({team_id: tId, player_id: targetPlayer, sender_id: currentUser.id, file_path: path, file_type: fileType, note});
   if(error){ showToast('Erreur : ' + error.message, 'error'); return; }
   closeModal();
   showToast('Document envoyé ✅', 'success');
@@ -6026,6 +6046,7 @@ function openKineSessionForm(playerId, playerName){
     <div class="field"><label>Date</label><input class="input" type="date" id="ks-date" value="${today()}"/></div>
     <div class="field"><label>Description / consignes</label><textarea class="input" id="ks-description" rows="4" placeholder="Détaille les soins, étirements, exercices de récupération..."></textarea></div>
     <div class="field"><label>PDF (ordonnance, programme — optionnel)</label><input class="input" type="file" id="ks-pdf" accept="application/pdf"/></div>
+    <div class="field"><label>▶️ Lien vidéo (YouTube, WeTransfer... — optionnel)</label><input class="input" id="ks-video" placeholder="https://... exercice de rééducation en vidéo"/></div>
     <button class="btn-save" onclick="submitKineSession()" style="background:#C0185A;color:#fff">ENVOYER LA SÉANCE</button>`;
   openModal(html);
 }
@@ -6046,8 +6067,9 @@ async function submitKineSession(){
     pdf_url = sb.storage.from('session_pdfs').getPublicUrl(path).data.publicUrl;
   }
 
+  const video_url = document.getElementById('ks-video')?.value.trim() || null;
   const row = {
-    team_id: team.id, created_by: currentUser.id, type: 'kine', titre, description, date, pdf_url,
+    team_id: team.id, created_by: currentUser.id, type: 'kine', titre, description, date, pdf_url, video_url,
     target_type: 'joueurs', target_ids: [_kineSessionTargetId]
   };
   const {error} = await sb.from('proposed_sessions').insert(row);
@@ -6933,7 +6955,8 @@ function renderSessionForm(){
       <button onclick="switchSource('club')" type="button" style="flex:1;padding:10px 4px;border-radius:10px;border:2px solid ${_currentSource==='club'?'#2E86AB':'#E8D8D0'};background:${_currentSource==='club'?'#2E86AB18':'#F5EEE8'};font-size:12px;font-weight:600;color:${_currentSource==='club'?'#2E86AB':'#9A7A70'}">🏉 Club</button>
     </div>
   </div>` : ''}
-  ${s.pdf_url?`<div class="field"><a href="${s.pdf_url}" target="_blank" style="display:flex;align-items:center;gap:8px;background:#2E86AB18;border:1px solid #2E86AB44;border-radius:10px;padding:10px 12px;color:#2E86AB;font-weight:700;font-size:13px;text-decoration:none">📎 Télécharger le PDF du préparateur</a></div>`:''}
+  ${s.pdf_url?`<div class="field"><a href="${s.pdf_url}" target="_blank" style="display:flex;align-items:center;gap:8px;background:#2E86AB18;border:1px solid #2E86AB44;border-radius:10px;padding:10px 12px;color:#2E86AB;font-weight:700;font-size:13px;text-decoration:none">📎 Télécharger le PDF du staff</a></div>`:''}
+  ${s.video_url?`<div class="field"><a href="${s.video_url}" target="_blank" style="display:flex;align-items:center;gap:8px;background:#C0392B18;border:1px solid #C0392B44;border-radius:10px;padding:10px 12px;color:#C0392B;font-weight:700;font-size:13px;text-decoration:none">▶️ Voir la vidéo explicative</a></div>`:''}
   ${_sessionMode === 'planifier'
     ? `<div class="field"><label>Objectif de la séance (optionnel)</label><textarea class="input" id="f_notes" rows="2" placeholder="Ex: Progresser de 5kg au squat, travailler l'explosivité...">${s.notes||''}</textarea></div>`
     : `<div class="field"><label>Notes</label><textarea class="input" id="f_notes" rows="2">${s.notes||''}</textarea></div>`
