@@ -31,7 +31,10 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { team_id, title, message, recipient_id, recipient_ids, chat, send_after, players_only } = await req.json();
+    const body = await req.json();
+    // Ping de version : permet à l'app de savoir si cette fonction est à jour
+    if (body.ping) return json({ ok: true, version: 2 });
+    const { team_id, title, message, recipient_id, recipient_ids, chat, send_after, players_only } = body;
     if (!team_id || !message) return json({ error: 'team_id et message requis' }, 400);
 
     // 1. Authentifier l'appelant via son JWT
