@@ -616,6 +616,8 @@ async function loadAllData(){
         matchReports = rpt.data || [];
       } else { matchReports = []; }
     } catch(e) { matchReports = []; }
+    // Compteurs de non-lus (pastilles rouges de la navigation)
+    try { await refreshUnreadCounts(); } catch(e){}
     sessions = (s.data || []).map(r => ({...r.data, id: r.id, date: r.date, type: r.type, heure: r.heure, duree: r.duree, ressenti: r.ressenti, difficulte: r.difficulte, notes: r.notes}));
     matches = m.data || [];
     chargesLog = (c.data || []).map(r => ({...r, sets: r.sets || []}));
@@ -1289,15 +1291,62 @@ function renderManagerNav(){
   if(moreMenu) moreMenu.style.display = 'none';
 }
 
+// ── BADGES DE NON-LU (pastilles rouges façon iPhone) ─────────────────────────
+let unreadCounts = {chat: 0, docs: 0, medical: 0};
+
+function lastSeen(key){
+  try { return localStorage.getItem('rp_seen_' + key) || '2020-01-01T00:00:00Z'; } catch(e){ return '2020-01-01T00:00:00Z'; }
+}
+function markSeen(key){
+  try { localStorage.setItem('rp_seen_' + key, new Date().toISOString()); } catch(e){}
+}
+
+async function refreshUnreadCounts(){
+  if(!currentUser || !myTeams.length){ unreadCounts = {chat:0, docs:0, medical:0}; return; }
+  const teamIds = myTeams.map(t => t.id);
+  const counts = {chat: 0, docs: 0, medical: 0};
+  try {
+    // Messages du chat (la sécurité base filtre déjà les groupes non autorisés), hors mes propres messages
+    const {count: c1} = await sb.from('team_messages').select('id', {count:'exact', head:true}).in('team_id', teamIds).neq('user_id', currentUser.id).gt('created_at', lastSeen('chat'));
+    counts.chat += c1 || 0;
+    // Messages privés reçus
+    const {count: c2} = await sb.from('direct_messages').select('id', {count:'exact', head:true}).eq('recipient_id', currentUser.id).gt('created_at', lastSeen('chat'));
+    counts.chat += c2 || 0;
+  } catch(e){}
+  try {
+    // Documents projet de jeu + analyses adverses (onglet Équipe)
+    const {count: d1} = await sb.from('team_documents').select('id', {count:'exact', head:true}).in('team_id', teamIds).gt('created_at', lastSeen('docs'));
+    const {count: d2} = await sb.from('team_opponent_analysis').select('id', {count:'exact', head:true}).in('team_id', teamIds).gt('created_at', lastSeen('docs'));
+    counts.docs = (d1||0) + (d2||0);
+  } catch(e){}
+  try {
+    // Documents médicaux reçus (onglet Médical)
+    if(myTeams.some(t => t.myRole === 'joueur')){
+      const {count: m1} = await sb.from('medical_files').select('id', {count:'exact', head:true}).eq('player_id', currentUser.id).neq('sender_id', currentUser.id).gt('created_at', lastSeen('medical'));
+      counts.medical = m1 || 0;
+    }
+  } catch(e){}
+  unreadCounts = counts;
+}
+
+function navBadge(n){
+  if(!n) return '';
+  return `<span style="position:absolute;top:3px;right:16%;background:#FF3B30;color:#fff;border-radius:20px;min-width:17px;height:17px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;padding:0 4px;border:1.5px solid #1A0A0A">${n>99?'99+':n}</span>`;
+}
+
+const MORE_TAB_BADGES = {chat_joueur: 'chat', equipe: 'docs', kine: 'medical'};
+
 function renderNav(){
   const navEl = document.getElementById('nav');
   if(!navEl) return;
   const mainTabs=[{id:"dashboard",icon:"🏠",label:"Home"},{id:"agenda",icon:"🗓️",label:"Agenda"},{id:"moi",icon:"👤",label:"Moi"},{id:"more",icon:"···",label:"Plus"}];
   const isMore = moreTabs.some(t=>t.id===currentView);
+  const totalUnread = (unreadCounts.chat||0) + (unreadCounts.docs||0) + (unreadCounts.medical||0);
   navEl.innerHTML=mainTabs.map(t=>{
     const isActive = t.id==="more" ? isMore : currentView===t.id;
-    return `<button class="nav-btn ${isActive?"active":""}" onclick="${t.id==="more"?"toggleMore()":"setView('"+t.id+"')"}">
+    return `<button class="nav-btn ${isActive?"active":""}" onclick="${t.id==="more"?"toggleMore()":"setView('"+t.id+"')"}" style="position:relative">
       <span class="nav-icon" style="${t.id==="more"?"font-size:14px;letter-spacing:3px":""}">${t.icon}</span>${t.label}
+      ${t.id==="more" ? navBadge(totalUnread) : ''}
     </button>`;
   }).join('');
   let moreMenu = document.getElementById('more-menu');
@@ -1307,10 +1356,14 @@ function renderNav(){
     moreMenu.style.cssText = 'position:fixed;bottom:calc(60px + env(safe-area-inset-bottom));right:0;left:0;max-width:600px;margin:0 auto;background:#1A0A0A;border-top:1px solid #3A2020;border-bottom:1px solid #3A2020;padding:14px 16px;z-index:99;display:none;box-shadow:0 -4px 20px rgba(0,0,0,0.3)';
     document.getElementById('app').appendChild(moreMenu);
   }
-  moreMenu.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px">`+moreTabs.map(t=>`
+  moreMenu.innerHTML = `<div style="display:flex;flex-wrap:wrap;gap:8px">`+moreTabs.map(t=>{
+    const badgeCount = unreadCounts[MORE_TAB_BADGES[t.id]] || 0;
+    return `
     <button onclick="setView('${t.id}');toggleMore()" style="display:inline-flex;align-items:center;gap:8px;background:${currentView===t.id?"#8B1A1A18":"#F5EEE8"};border:1px solid ${currentView===t.id?"#8B1A1A":"#E8D8D0"};border-radius:10px;padding:10px 14px;color:${currentView===t.id?"#8B1A1A":"#1A0A0A"};font-size:13px;font-weight:600">
       <span style="font-size:16px">${t.icon}</span>${t.label}
-    </button>`).join('')+`</div>`;
+      ${badgeCount ? `<span style="background:#FF3B30;color:#fff;border-radius:20px;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;padding:0 5px">${badgeCount>99?'99+':badgeCount}</span>` : ''}
+    </button>`;
+  }).join('')+`</div>`;
   moreMenu.style.display = showMoreMenu ? 'block' : 'none';
   // Overlay pour fermer le menu en cliquant ailleurs
   let overlay = document.getElementById('more-overlay');
@@ -1333,7 +1386,14 @@ function toggleMore(){ showMoreMenu = !showMoreMenu; renderNav(); }
 
 function renderPhaseBadge(){}
 
-function setView(v){ currentView=v; showMoreMenu=false; render(); }
+function setView(v){
+  currentView=v; showMoreMenu=false;
+  // Ouvrir un onglet marque son contenu comme lu (pastilles rouges)
+  if(v === 'chat_joueur'){ markSeen('chat'); unreadCounts.chat = 0; }
+  else if(v === 'equipe'){ markSeen('docs'); unreadCounts.docs = 0; }
+  else if(v === 'kine'){ markSeen('medical'); unreadCounts.medical = 0; }
+  render();
+}
 
 // ── DASHBOARD ─────────────────────────────────────────────────────────────────
 function renderPlayerMatchNoteBtn(teamEventId, adversaire){
