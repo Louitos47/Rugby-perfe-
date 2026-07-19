@@ -180,7 +180,7 @@ input,textarea,select{outline:none;font-family:inherit}
 .toast.success{background:#1A8C6E}
 .toast.error{background:#C0392B}
 /* CHRONO */
-.chrono-bar{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:600px;z-index:200;transition:transform .3s}
+.chrono-bar{position:fixed;top:0;left:50%;transform:translateX(-50%);width:100%;max-width:600px;z-index:250;transition:transform .3s}
 .chrono-bar.hidden{transform:translateX(-50%) translateY(-100%)}
 .chrono-inner{background:#1A0A0A;border-bottom:2px solid #8B1A1A;padding:8px 16px;padding-top:calc(8px + env(safe-area-inset-top));display:flex;align-items:center;justify-content:space-between;gap:12px}
 .chrono-time{font-size:22px;font-weight:900;letter-spacing:3px;color:#C8302A;font-variant-numeric:tabular-nums;min-width:80px}
@@ -992,7 +992,7 @@ function renderMainApp(){
           : `<span style="font-size:16px">👤</span>`}
         <span style="font-size:12px;color:#FFFFFF;font-weight:600">${userProfile?.nom||''}</span>
       </button>
-      ${(isPureKine() || isPurePrepa() || isPureManager() || isPureCoach()) ? '' : `<div style="display:flex;gap:6px"><button class="btn-add" onclick="openPlanifierSession()" style="background:#2E86AB;font-size:11px;padding:7px 10px">📋 Planifier</button><button class="btn-add" onclick="openDemarrerSession()" style="font-size:11px;padding:7px 10px">▶ Séance</button></div>`}
+      ${(isPureKine() || isPurePrepa() || isPureManager() || isPureCoach()) ? '' : `<div style="display:flex;gap:6px"><button class="btn-add" onclick="chronoShow()" style="background:#1A0A0A;border:1px solid #5A3030;font-size:13px;padding:7px 9px" title="Chronomètre">⏱️</button><button class="btn-add" onclick="openPlanifierSession()" style="background:#2E86AB;font-size:11px;padding:7px 10px">📋 Planifier</button><button class="btn-add" onclick="openDemarrerSession()" style="font-size:11px;padding:7px 10px">▶ Séance</button></div>`}
     </div>
   </div>
   <div class="content" id="content"></div>
@@ -7587,9 +7587,51 @@ function removeFromBloc(exLabel, blocIdx){
   renderSessionForm();
 }
 
+// Liste des séances muscu passées, pour repartir d'une séance existante
+function renderPastMuscuPicker(){
+  const past = sessions
+    .filter(s => s.type === 'muscu' && s.muscuSets?.length && s.id != editingItem?.id)
+    .sort((a,b) => b.date.localeCompare(a.date))
+    .slice(0, 8);
+  if(!past.length) return '';
+  return `<details style="margin-bottom:12px">
+    <summary style="font-size:13px;font-weight:700;color:#2E86AB;cursor:pointer;padding:6px 0">📋 Reprendre une séance précédente</summary>
+    <div style="background:#F5EEE8;border-radius:10px;padding:4px 10px;margin-top:6px">
+    ${past.map(s => {
+      const n = s.muscuSets.length;
+      const sid = typeof s.id === 'number' ? s.id : `'${s.id}'`;
+      return `<div onclick="duplicatePastSession(${sid})" style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:10px 2px;border-bottom:1px solid #E8D8D0;cursor:pointer">
+        <div style="flex:1;min-width:0">
+          <div style="font-size:13px;font-weight:700">Séance muscu du ${fmtFull(s.date)}</div>
+          <div style="font-size:11px;color:#9A7A70">${n} exercice${n>1?'s':''}${s.focus?' · '+escHtml(s.focus):''}</div>
+        </div>
+        <span style="font-size:12px;color:#2E86AB;font-weight:700;flex-shrink:0">Reprendre ›</span>
+      </div>`;
+    }).join('')}
+    </div>
+  </details>`;
+}
+
+function duplicatePastSession(sid){
+  const s = sessions.find(x => x.id == sid);
+  if(!s) return;
+  (s.muscuSets||[]).forEach(ms => {
+    if(!ms.exLabel) return;
+    sessionSets[ms.exLabel] = (ms.sets?.length ? ms.sets : [{kg:'',reps:''}]).map(st => ({...st}));
+    if(ms.tempo) sessionExTempo[ms.exLabel] = ms.tempo;
+  });
+  if(s.blocs?.length) sessionBlocs = JSON.parse(JSON.stringify(s.blocs));
+  renderSessionForm();
+  showToast('Séance du ' + fmt(s.date) + ' reprise — ajuste tes charges !', 'success');
+}
+
 function renderMuscuForm(bycat, selected){
   let html = `<div class="field">
-    <label>Ajouter un exercice</label>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
+      <label style="margin-bottom:0">Ajouter un exercice</label>
+      <button onclick="chronoShow()" style="background:#1A0A0A;color:#C8302A;border:1px solid #3A2020;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:800">⏱️ Chrono</button>
+    </div>
+    ${renderPastMuscuPicker()}
     <div style="margin-bottom:12px">
       <button onclick="openExerciseLibraryModal()" style="width:100%;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:10px;padding:12px;font-weight:700;font-size:13px;color:#8B1A1A;text-align:left;display:flex;align-items:center;gap:8px"><span style="font-size:16px">🔍</span> Chercher un exercice...</button>
     </div>`;
