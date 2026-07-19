@@ -966,8 +966,9 @@ function renderMainApp(){
 
     </div>
     <div style="display:flex;gap:8px;align-items:center">
+      ${isPureKine() ? `<button class="btn-add" onclick="openKineGlobalAdd()" style="background:#C0185A;font-size:17px;padding:5px 13px;border-radius:50%" title="Action rapide pour un joueur">＋</button>` : ''}
       <button class="btn-logout" onclick="openProfileModal()" style="display:flex;align-items:center;gap:6px;padding:4px 10px 4px 4px">
-        ${userProfile?.avatar_url 
+        ${userProfile?.avatar_url
           ? `<img src="${userProfile.avatar_url}" style="width:26px;height:26px;border-radius:50%;object-fit:cover;border:1px solid #5A3030" alt=""/>`
           : `<span style="font-size:16px">👤</span>`}
         <span style="font-size:12px;color:#FFFFFF;font-weight:600">${userProfile?.nom||''}</span>
@@ -6015,6 +6016,36 @@ async function loadKineTeamData(teamId){
     </div>`;
   });
   container.innerHTML = html || '<div style="color:#9A7A70;text-align:center;padding:20px">Aucun profil.</div>';
+}
+
+// Bouton + global du bandeau (session médical) : choisir un joueur puis l'action
+async function openKineGlobalAdd(){
+  const team = myTeams.find(t => t.myRole === 'kine');
+  if(!team) return;
+  const {data: members} = await sb.from('team_members').select('user_id').eq('team_id', team.id).eq('role', 'joueur');
+  const ids = [...new Set((members||[]).map(m => m.user_id))];
+  if(!ids.length){ showToast('Aucun joueur dans l\'équipe', 'error'); return; }
+  const {data: profiles} = await sb.from('profiles').select('id, nom, nom_famille, poste').in('id', ids);
+  const list = (profiles||[]).sort((a,b) => (a.nom||'').localeCompare(b.nom||''));
+  const html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px">
+    <div class="modal-title" style="margin-bottom:0">➕ POUR QUEL JOUEUR ?</div>
+    <span onclick="closeModal()" style="font-size:22px;color:#9A7A70;cursor:pointer;padding:4px 8px">×</span>
+  </div>
+  <div style="font-size:11px;color:#9A7A70;margin-bottom:10px">Choisis le joueur, puis l'action : séance, examen, blessure, message...</div>
+  <div style="max-height:55vh;overflow-y:auto">
+  ${list.map(p => {
+    const name = ((p.nom||'') + ' ' + (p.nom_famille||'')).trim() || 'Joueur';
+    return `<div onclick="openKineQuickActions('${p.id}','${name.replace(/'/g,"\\'")}',${team.id})" style="display:flex;align-items:center;gap:10px;padding:11px 6px;border-bottom:1px solid #F5EEE8;cursor:pointer">
+      <span style="font-size:18px">🏉</span>
+      <div style="flex:1">
+        <div style="font-size:13px;font-weight:700">${escHtml(name)}</div>
+        <div style="font-size:11px;color:#9A7A70">${escHtml(p.poste||'')}</div>
+      </div>
+      <span style="color:#C0185A;font-size:16px">›</span>
+    </div>`;
+  }).join('')}
+  </div>`;
+  openModal(html);
 }
 
 // Menu d'actions rapides sur un joueur (bouton + de la liste médical)
