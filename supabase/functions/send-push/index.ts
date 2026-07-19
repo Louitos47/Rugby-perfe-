@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { team_id, title, message, recipient_id, recipient_ids, chat } = await req.json();
+    const { team_id, title, message, recipient_id, recipient_ids, chat, send_after } = await req.json();
     if (!team_id || !message) return json({ error: 'team_id et message requis' }, 400);
 
     // 1. Authentifier l'appelant via son JWT
@@ -64,6 +64,8 @@ Deno.serve(async (req) => {
       contents: { fr: message, en: message },
       url: APP_URL,
     };
+    // Notification programmée (ex: check-in "pas de bobo ?" le soir du match)
+    if (send_after) payload.send_after = send_after;
 
     const targets: string[] = recipient_ids?.length
       ? recipient_ids

@@ -249,6 +249,7 @@ async function sendPushToTeam(teamId, title, message, recipientId, opts={}){
     if(Array.isArray(recipientId)) body.recipient_ids = recipientId;
     else if(recipientId) body.recipient_id = recipientId;
     if(opts.chat) body.chat = true;
+    if(opts.sendAfter) body.send_after = opts.sendAfter; // notification programmée (ex: soir de match)
     await fetch(PUSH_FN_URL, {
       method: 'POST',
       headers: {
@@ -1382,6 +1383,7 @@ function renderDashboard(){
   // Home épuré : annonces du staff, rappels, forme du jour, prochain match,
   // prochaines séances et séances récentes — pas de bloc profil ni compteurs.
   let html = renderTeamAnnouncementsBar();
+  html += renderMatchHealthCheckBar();
   html += renderMatchReportsBar();
   html += renderProposedSessionsInbox();
   html += renderNotifTutoCard();
@@ -2422,6 +2424,19 @@ async function saveManagerEvent(type){
   // Notification push aux joueurs
   sendPushToTeam(team.id, '📅 ' + (team.name||'Rugby Perf'),
     (type==='match'?'⚔️ Nouveau match : ':'🏉 Nouvel entraînement : ') + titre + ' — ' + fmtFull(date) + (heure?' à '+heure:''));
+  // Check-in santé programmé le soir du match (~3h après le coup d'envoi) :
+  // "Pas de bobo ?" — le joueur répond depuis la carte sur son accueil
+  if(type === 'match'){
+    try {
+      const kickoff = new Date(date + 'T' + (heure || '15:00'));
+      const sendAt = new Date(kickoff.getTime() + 3*3600*1000);
+      if(sendAt.getTime() > Date.now()){
+        sendPushToTeam(team.id, '🩹 ' + (team.name||'Rugby Perf'),
+          'Ton match s\'est bien passé ? Pas de bobo ? Réponds sur ton accueil 🏉',
+          null, {sendAfter: sendAt.toISOString()});
+      }
+    } catch(e){}
+  }
   loadManagerOverview(team.id);
   // Recharger les team_events côté joueur si c'est le même compte
   const {data: ev} = await sb.from('team_events').select('*').in('team_id', myTeams.map(t=>t.id)).gte('date', addDays(today(),-7));
@@ -5386,6 +5401,52 @@ function openMatchReport(id){
   ${r.content?`<div style="font-size:13px;line-height:1.7;color:#1A0A0A;white-space:pre-wrap;background:#F5EEE8;border-radius:10px;padding:12px">${escHtml(r.content)}</div>`:''}
   <button onclick="closeModal()" style="width:100%;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:10px;padding:12px;color:#9A7A70;font-weight:600;margin-top:14px">Fermer</button>`;
   openModal(html);
+}
+
+// ── CHECK-IN SANTÉ POST-MATCH ("Pas de bobo ?") ──────────────────────────────
+// Carte affichée sur l'accueil du joueur le jour du match et le lendemain,
+// tant qu'il n'a pas répondu. Uniquement s'il y a eu un match.
+function renderMatchHealthCheckBar(){
+  if(!myTeams.some(t => t.myRole === 'joueur')) return '';
+  const recentMatches = teamEvents.filter(e => e.type === 'match' && e.date >= addDays(today(), -1) && e.date <= today());
+  if(!recentMatches.length) return '';
+  setTimeout(()=>loadHealthCheckCard(recentMatches), 0);
+  return '<div id="health-check-bar"></div>';
+}
+
+async function loadHealthCheckCard(matches){
+  const el = document.getElementById('health-check-bar');
+  if(!el) return;
+  try {
+    const ids = matches.map(m => m.id);
+    const {data: answered, error} = await sb.from('match_health_checks').select('team_event_id').eq('user_id', currentUser.id).in('team_event_id', ids);
+    if(error) return; // table pas encore créée → pas de carte
+    const done = new Set((answered||[]).map(a => a.team_event_id));
+    const pending = matches.filter(m => !done.has(m.id));
+    if(!pending.length){ el.innerHTML = ''; return; }
+    const m = pending[0];
+    el.innerHTML = `<div style="background:#C0185A0C;border:1px solid #C0185A33;border-radius:12px;padding:14px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:800;color:#1A0A0A">🏉 Ton match${m.titre?' vs '+escHtml(m.titre):''} s'est bien passé ?</div>
+      <div style="font-size:11px;color:#9A7A70;margin-top:2px;margin-bottom:10px">Le staff médical aimerait savoir si tout va bien physiquement.</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="answerHealthCheck(${m.id},'ok')" style="flex:1;background:#1A8C6E;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;font-size:13px">✅ Pas de bobo !</button>
+        <button onclick="answerHealthCheck(${m.id},'bobo')" style="flex:1;background:#C0392B;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;font-size:13px">🩹 J'ai un bobo</button>
+      </div>
+    </div>`;
+  } catch(e){}
+}
+
+async function answerHealthCheck(eventId, status){
+  try { await sb.from('match_health_checks').insert({team_event_id: eventId, user_id: currentUser.id, status}); } catch(e){}
+  const el = document.getElementById('health-check-bar');
+  if(el) el.innerHTML = '';
+  if(status === 'bobo'){
+    // Enchaîne directement sur la déclaration de blessure (silhouette + photo)
+    // → le staff médical est automatiquement notifié à l'enregistrement
+    openInjuryModal();
+  } else {
+    showToast('Content que tout aille bien ! 💪', 'success');
+  }
 }
 
 function renderMatchReportsBar(){
