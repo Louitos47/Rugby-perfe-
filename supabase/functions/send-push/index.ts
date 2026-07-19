@@ -31,7 +31,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
 
   try {
-    const { team_id, title, message, recipient_id, recipient_ids, chat, send_after } = await req.json();
+    const { team_id, title, message, recipient_id, recipient_ids, chat, send_after, players_only } = await req.json();
     if (!team_id || !message) return json({ error: 'team_id et message requis' }, 400);
 
     // 1. Authentifier l'appelant via son JWT
@@ -86,9 +86,17 @@ Deno.serve(async (req) => {
     } else if (chat === true) {
       // Message de chat d'équipe : tout membre peut notifier l'équipe
       payload.filters = [{ field: 'tag', key: 'team_id', relation: '=', value: String(team_id) }];
+      // Cibler uniquement les joueurs (ex: check-in "pas de bobo ?")
+      if (players_only) {
+        (payload.filters as unknown[]).push({ field: 'tag', key: 'role', relation: '=', value: 'joueur' });
+      }
     } else if (roles.some((r) => ['manager', 'prepa', 'coach'].includes(r))) {
       // Notification officielle à toute l'équipe : réservé au staff
       payload.filters = [{ field: 'tag', key: 'team_id', relation: '=', value: String(team_id) }];
+      // Cibler uniquement les joueurs (ex: check-in "pas de bobo ?")
+      if (players_only) {
+        (payload.filters as unknown[]).push({ field: 'tag', key: 'role', relation: '=', value: 'joueur' });
+      }
     } else {
       return json({ error: "Réservé au staff de l'équipe" }, 403);
     }

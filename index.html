@@ -250,6 +250,7 @@ async function sendPushToTeam(teamId, title, message, recipientId, opts={}){
     else if(recipientId) body.recipient_id = recipientId;
     if(opts.chat) body.chat = true;
     if(opts.sendAfter) body.send_after = opts.sendAfter; // notification programmée (ex: soir de match)
+    if(opts.playersOnly) body.players_only = true;       // ne notifier que les joueurs, pas le staff
     await fetch(PUSH_FN_URL, {
       method: 'POST',
       headers: {
@@ -2494,7 +2495,7 @@ async function saveManagerEvent(type){
       if(sendAt.getTime() > Date.now()){
         sendPushToTeam(team.id, '🩹 ' + (team.name||'Rugby Perf'),
           'Ton match s\'est bien passé ? Pas de bobo ? Réponds sur ton accueil 🏉',
-          null, {sendAfter: sendAt.toISOString()});
+          null, {sendAfter: sendAt.toISOString(), playersOnly: true});
       }
     } catch(e){}
   }
