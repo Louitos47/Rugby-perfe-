@@ -6003,16 +6003,42 @@ async function loadKineTeamData(teamId){
     const activeInj = injByPlayer[player.id] || [];
     const isApte = aptByPlayer[player.id] !== false;
     const hasBlessure = activeInj.length > 0;
-    html += `<div onclick="openKinePlayerDetail('${player.id}','${(player.nom||'').replace(/'/g,"\\'")} ${(player.nom_famille||'').replace(/'/g,"\\'")}',${teamId})" class="card" style="display:flex;align-items:center;gap:12px;cursor:pointer;border-color:${hasBlessure?'#C0392B33':'#E8D8D0'}">
-      <div style="flex:1">
+    const safeName = ((player.nom||'') + ' ' + (player.nom_famille||'')).replace(/'/g,"\\'");
+    html += `<div onclick="openKinePlayerDetail('${player.id}','${safeName}',${teamId})" class="card" style="display:flex;align-items:center;gap:10px;cursor:pointer;border-color:${hasBlessure?'#C0392B33':'#E8D8D0'}">
+      <div style="flex:1;min-width:0">
         <div style="font-size:14px;font-weight:800">${player.nom||''} ${player.nom_famille||''}</div>
         <div style="font-size:11px;color:#9A7A70">${player.poste||'Poste non renseigné'}</div>
         ${hasBlessure ? `<div style="font-size:11px;color:#C0392B;margin-top:3px">🩹 ${activeInj.length} blessure(s)</div>` : ''}
       </div>
-      <span style="font-size:10px;font-weight:800;border-radius:20px;padding:3px 10px;background:${isApte?'#1A8C6E18':'#C0392B18'};color:${isApte?'#1A8C6E':'#C0392B'}">${isApte?'✓ Apte':'⚠️ Non apte'}</span>
+      <span style="font-size:10px;font-weight:800;border-radius:20px;padding:3px 10px;background:${isApte?'#1A8C6E18':'#C0392B18'};color:${isApte?'#1A8C6E':'#C0392B'};flex-shrink:0">${isApte?'✓ Apte':'⚠️ Non apte'}</span>
+      <button onclick="event.stopPropagation();openKineQuickActions('${player.id}','${safeName}',${teamId})" style="background:#C0185A;color:#fff;border:none;border-radius:50%;width:32px;height:32px;font-size:18px;font-weight:800;flex-shrink:0;line-height:1">+</button>
     </div>`;
   });
   container.innerHTML = html || '<div style="color:#9A7A70;text-align:center;padding:20px">Aucun profil.</div>';
+}
+
+// Menu d'actions rapides sur un joueur (bouton + de la liste médical)
+function openKineQuickActions(playerId, playerName, teamId){
+  const esc = playerName.replace(/'/g,"\\'");
+  const btn = (icon, label, sub, onclick, color) => `<button onclick="${onclick}" style="display:flex;align-items:center;gap:12px;width:100%;background:${color}10;border:1px solid ${color}33;border-radius:12px;padding:13px 14px;margin-bottom:8px;text-align:left;cursor:pointer">
+    <span style="font-size:20px">${icon}</span>
+    <div style="flex:1">
+      <div style="font-size:14px;font-weight:800;color:${color}">${label}</div>
+      ${sub?`<div style="font-size:11px;color:#9A7A70;margin-top:1px">${sub}</div>`:''}
+    </div>
+    <span style="color:${color};font-size:16px">›</span>
+  </button>`;
+  const html = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div class="modal-title" style="margin-bottom:0">🩺 ${escHtml(playerName).toUpperCase()}</div>
+    <span onclick="closeModal()" style="font-size:22px;color:#9A7A70;cursor:pointer;padding:4px 8px">×</span>
+  </div>
+  ${btn('📋','Créer une séance soin','Exercices, protocole, PDF, vidéo...', `openKineSessionForm('${playerId}','${esc}')`, '#C0185A')}
+  ${btn('📎','Envoyer un examen / document','Photo, PDF, ordonnance, lien vidéo', `openSendMedicalDoc('${playerId}','${esc}',${teamId})`, '#7B2D8B')}
+  ${btn('🩹','Déclarer une blessure','Ajoutée à son dossier, joueur notifié', `openKineInjuryForm('${playerId}','${esc}',${teamId})`, '#C0392B')}
+  ${btn('✉️','Message privé','Conversation directe avec le joueur', `openDmWith('${playerId}','kine_chat')`, '#2E86AB')}
+  ${btn('📝','Note personnelle','Visible uniquement par toi', `openKineNotesModal('${playerId}','${esc}',${teamId})`, '#D4841A')}
+  ${btn('👤','Fiche complète','Blessures, aptitude, documents, historique', `openKinePlayerDetail('${playerId}','${esc}',${teamId})`, '#1A8C6E')}`;
+  openModal(html);
 }
 
 async function openKinePlayerDetail(playerId, playerName, teamId){
