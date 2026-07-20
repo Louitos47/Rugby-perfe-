@@ -7634,11 +7634,11 @@ function duplicatePastSession(sid){
 
 function renderMuscuForm(bycat, selected){
   let html = `<div class="field">
+    ${renderPastMuscuPicker()}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
       <label style="margin-bottom:0">Ajouter un exercice</label>
       <button onclick="chronoShow()" style="background:#1A0A0A;color:#C8302A;border:1px solid #3A2020;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:800">⏱️ Chrono</button>
     </div>
-    ${renderPastMuscuPicker()}
     <div style="margin-bottom:12px">
       <button onclick="openExerciseLibraryModal()" style="width:100%;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:10px;padding:12px;font-weight:700;font-size:13px;color:#8B1A1A;text-align:left;display:flex;align-items:center;gap:8px"><span style="font-size:16px">🔍</span> Chercher un exercice...</button>
     </div>`;
