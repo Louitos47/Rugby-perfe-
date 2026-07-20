@@ -8749,6 +8749,17 @@ async function submitSession(){
   sessionSets = {};
   sessionBlocs = [];
   sessionExTempo = {};
+  // Prévenir le staff médical quand un joueur enregistre une séance soin
+  // (nouvelle séance uniquement — pas à chaque modification)
+  if(type === 'kine' && !wasEditing && newId){
+    myTeams.filter(t => t.myRole === 'joueur').forEach(async t => {
+      try {
+        const {data: staff} = await sb.from('team_members').select('user_id').eq('team_id', t.id).eq('role', 'kine');
+        const ids = [...new Set((staff||[]).map(x => x.user_id))].filter(uid => uid !== currentUser.id);
+        if(ids.length) sendPushToTeam(t.id, '🩺 ' + t.name, userName() + ' a enregistré une séance soin' + (extra.kineZone ? ' : ' + extra.kineZone : '') + ' — ' + fmtFull(date), ids);
+      } catch(e){}
+    });
+  }
   _editingSessionId = null;
   // closeModal() remet editingItem à null — on le rétablit APRÈS pour que la
   // clôture (mode demarrer) garde la référence vers la séance sauvegardée
