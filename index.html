@@ -318,6 +318,10 @@ const OWNER_EMAIL = 'louisdel47@gmail.com'; // seul ce compte peut créer une é
 let seasonPeriod = 'ete';
 let currentView = 'dashboard';
 let editingItem = null;
+// ID base (Supabase) de la séance en cours d'édition. Contrairement à
+// editingItem, il SURVIT aux closeModal() intermédiaires (bibliothèque
+// d'exercices, etc.) — c'est lui qui garantit un UPDATE et jamais un doublon.
+let _editingSessionId = null;
 let _sessionMode = 'normal'; // 'normal', 'planifier', 'demarrer'
 let calMonth = today().slice(0,7);
 let expandedCards = new Set();
@@ -6956,6 +6960,7 @@ function openPlanifierSession(){
   _sessionMode = 'planifier';
   _currentType = 'muscu';
   editingItem = null;
+  _editingSessionId = null; // nouvelle séance : ne surtout pas réutiliser un ID précédent
   sessionSets = {};
   sessionBlocs = [];
   renderSessionForm();
@@ -6995,6 +7000,8 @@ function renderDemarrerModal(){
 
 function openSessionForm(initial=null){
   editingItem=initial;
+  // Mémoriser l'ID réel de la séance éditée (les ID temporaires Date.now() ne comptent pas)
+  _editingSessionId = (initial?.id && !(typeof initial.id === 'number' && initial.id > 1000000000000)) ? initial.id : null;
   _currentType=initial?.type||'terrain';
   _currentRessenti=initial?.ressenti??2;
   _currentDifficulte=initial?.difficulte??2;
@@ -7946,6 +7953,7 @@ function demarrerSeancePlanifiee(sessionId){
   }
   if(s.blocs?.length) sessionBlocs = JSON.parse(JSON.stringify(s.blocs));
   editingItem = s;
+  _editingSessionId = (typeof s.id === 'number' && s.id > 1000000000000) ? null : s.id;
   renderSessionForm();
 }
 
@@ -8561,8 +8569,8 @@ function renderCloture(s){
 }
 
 async function submitCloture(sessionId){
-  // Priorité à editingItem qui a le vrai ID Supabase
-  let sid = editingItem?.id || sessionId;
+  // Priorité à editingItem / _editingSessionId qui ont le vrai ID Supabase
+  let sid = editingItem?.id || _editingSessionId || sessionId;
   console.log('submitCloture sid=', sid, 'editingItem?.id=', editingItem?.id, 'sessionId=', sessionId);
   let s = sessions.find(x => x.id == sid) || editingItem;
   console.log('session trouvée:', s?.id, s?.type);
@@ -8604,6 +8612,7 @@ async function submitCloture(sessionId){
 
   _sessionMode = 'normal';
   editingItem = null;
+  _editingSessionId = null;
   closeModal();
   // Recharger les sessions depuis Supabase pour être sûr
   try {
@@ -8695,8 +8704,11 @@ async function submitSession(){
   else if(type==="recup") extra={recupType:document.getElementById("f_recuptype")?.value||''};
   else if(type==="forme") extra={formeNote:document.getElementById("f_formenote")?.value||''};
 
+  // Identification robuste : _editingSessionId survit aux fermetures de modaux
+  // intermédiaires, editingItem sert de secours — sinon c'est une nouvelle séance
+  const editId = _editingSessionId || ((editingItem?.id && !(typeof editingItem.id === 'number' && editingItem.id > 1000000000000)) ? editingItem.id : null);
   const session={
-    id:editingItem?.id||Date.now(),
+    id:editId||Date.now(),
     type, date,
     heure:document.getElementById("f_heure")?.value||'',
     duree:Number(document.getElementById("f_duree").value)||0,
@@ -8709,7 +8721,7 @@ async function submitSession(){
     notes:document.getElementById("f_notes")?.value||'',
     ...extra
   };
-  const wasEditing = !!editingItem?.id;
+  const wasEditing = !!editId;
   const newId = await saveSession(session);
   if(newId) session.id = newId;
   if(wasEditing) sessions=sessions.map(s=>s.id===session.id?session:s);
@@ -8737,16 +8749,17 @@ async function submitSession(){
   sessionSets = {};
   sessionBlocs = [];
   sessionExTempo = {};
-  // Si mode demarrer : la séance est maintenant en base avec un vrai ID
-  // On met à jour editingItem avec le vrai ID pour que la clôture fonctionne
+  _editingSessionId = null;
+  // closeModal() remet editingItem à null — on le rétablit APRÈS pour que la
+  // clôture (mode demarrer) garde la référence vers la séance sauvegardée
+  closeModal();
   if(_sessionMode === 'demarrer' && newId){
     const savedSession = sessions.find(s => s.id == newId);
-    if(savedSession) editingItem = savedSession;
+    if(savedSession){ editingItem = savedSession; _editingSessionId = savedSession.id; }
   } else {
-    editingItem = null;
     _sessionMode = 'normal';
   }
-  closeModal(); render();
+  render();
   if(type==="muscu"){
     const attempted = extra.muscuSets?.length || 0;
     if(chargesSavedCount > 0 && chargesSavedCount === attempted){
@@ -8766,6 +8779,9 @@ async function submitSession(){
 function editSession(id){
   const s=sessions.find(x=>x.id==id);
   if(s){
+    // Mode cohérent avec l'état de la séance (et pas un reliquat d'un flux précédent) :
+    // une séance planifiée reste planifiée, une séance faite reste faite
+    _sessionMode = (s.ressenti === null || s.ressenti === undefined) && !s.pied_stats ? 'planifier' : 'normal';
     _currentType=s.type; _currentRessenti=s.ressenti??2;
     // Séance jeu au pied — rouvrir le module pied avec les données existantes
     if(s.type === 'pied' || s.terrain_sub === 'pied'){
