@@ -2575,18 +2575,19 @@ function renderManagerHome(){
     <button onclick="openManagerEventForm('match')" style="flex:1;background:#C0392B;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;font-size:13px">⚔️ Créer un match</button>
     <button onclick="openManagerEventForm('entrainement')" style="flex:1;background:#2E86AB;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;font-size:13px">🏉 Créer un entraînement</button>
   </div>
+  <button onclick="openManagerEventForm('autre')" style="width:100%;background:#7B2D8B;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;font-size:13px;margin-bottom:4px">📌 Créer un autre événement</button>
   <div id="manager-overview">Chargement...</div>`;
   setTimeout(()=>loadManagerOverview(team.id), 0);
   return html;
 }
 
 function openManagerEventForm(type){
-  const isMatch = type === 'match';
-  const titre_label = isMatch ? 'Adversaire' : 'Titre';
-  const titre_placeholder = isMatch ? 'Ex: RC Narbonne' : 'Ex: Entraînement semaine 12';
-  const btn_label = isMatch ? 'CRÉER LE MATCH' : "CRÉER L'ENTRAÎNEMENT";
-  const btn_color = isMatch ? '#C0392B' : '#2E86AB';
-  const modal_title = isMatch ? '⚔️ NOUVEAU MATCH' : '🏉 NOUVEL ENTRAÎNEMENT';
+  const cfg = {
+    match:        {label:'Adversaire', ph:'Ex: RC Narbonne',                    btn:'CRÉER LE MATCH',      color:'#C0392B', title:'⚔️ NOUVEAU MATCH'},
+    entrainement: {label:'Titre',      ph:'Ex: Entraînement semaine 12',        btn:"CRÉER L'ENTRAÎNEMENT", color:'#2E86AB', title:'🏉 NOUVEL ENTRAÎNEMENT'},
+    autre:        {label:'Préciser',   ph:'Réunion, 3ème mi-temps, tournoi…',   btn:"CRÉER L'ÉVÉNEMENT",   color:'#7B2D8B', title:'📌 AUTRE ÉVÉNEMENT'}
+  }[type] || {label:'Titre', ph:'', btn:'CRÉER', color:'#2E86AB', title:'NOUVEL ÉVÉNEMENT'};
+  const titre_label = cfg.label, titre_placeholder = cfg.ph, btn_label = cfg.btn, btn_color = cfg.color, modal_title = cfg.title;
   const html = '<div style="display:flex;justify-content:space-between;align-items:center">' +
     '<div class="modal-title" style="margin-bottom:0">' + modal_title + '</div>' +
     '<span onclick="closeModal()" style="font-size:22px;color:#9A7A70;cursor:pointer;padding:4px 8px">×</span></div>' +
@@ -2608,10 +2609,12 @@ async function saveManagerEvent(type){
   });
   if(error){ showToast('Erreur : '+error.message, 'error'); return; }
   closeModal();
-  showToast((type==='match'?'Match':'Entraînement') + " créé pour toute l'équipe !", 'success');
+  const kindLabel = type==='match' ? 'Match' : type==='autre' ? 'Événement' : 'Entraînement';
+  showToast(kindLabel + " créé pour toute l'équipe !", 'success');
   // Notification push aux joueurs
+  const pushPrefix = type==='match' ? '⚔️ Nouveau match : ' : type==='autre' ? '📌 Nouvel événement : ' : '🏉 Nouvel entraînement : ';
   sendPushToTeam(team.id, '📅 ' + (team.name||'Rugby Perf'),
-    (type==='match'?'⚔️ Nouveau match : ':'🏉 Nouvel entraînement : ') + titre + ' — ' + fmtFull(date) + (heure?' à '+heure:''));
+    pushPrefix + titre + ' — ' + fmtFull(date) + (heure?' à '+heure:''));
   // Check-in santé programmé le soir du match (~3h après le coup d'envoi) :
   // "Pas de bobo ?" — le joueur répond depuis la carte sur son accueil
   if(type === 'match'){
@@ -2629,6 +2632,58 @@ async function saveManagerEvent(type){
   // Recharger les team_events côté joueur si c'est le même compte
   const {data: ev} = await sb.from('team_events').select('*').in('team_id', myTeams.map(t=>t.id)).gte('date', addDays(today(),-7));
   teamEvents = ev || [];
+}
+
+// Mémorise les sans-réponse par événement pour le bouton de relance
+let _attendanceNoResp = {};
+
+// Bloc présences d'un événement (côté manager) : compteurs + liste dépliable + relance
+function renderManagerAttendance(ev, rows, nameById, allJoueurIds, teamId){
+  const byStatut = {present:[], absent:[], incertain:[]};
+  const responded = new Set();
+  rows.forEach(r => { if(byStatut[r.statut]) byStatut[r.statut].push(r); responded.add(r.user_id); });
+  const noResp = (allJoueurIds||[]).filter(id => !responded.has(id));
+  _attendanceNoResp[ev.id] = noResp;
+
+  const counters = `<div style="display:flex;flex-wrap:wrap;gap:10px;font-size:11px;font-weight:700;margin-top:10px;padding-top:8px;border-top:1px solid #F5EEE8">
+    <span style="color:#1A8C6E">✅ ${byStatut.present.length} présent${byStatut.present.length>1?'s':''}</span>
+    <span style="color:#C0392B">❌ ${byStatut.absent.length} absent${byStatut.absent.length>1?'s':''}</span>
+    <span style="color:#D4841A">❓ ${byStatut.incertain.length} incertain${byStatut.incertain.length>1?'s':''}</span>
+    <span style="color:#9A7A70">⏳ ${noResp.length} sans réponse</span>
+  </div>`;
+
+  const listCat = (title, color, items, withReason) => {
+    if(!items.length) return '';
+    return `<div style="margin-top:8px"><div style="font-size:11px;font-weight:800;color:${color};margin-bottom:3px">${title}</div>` +
+      items.map(x => {
+        const nm = escHtml(typeof x === 'string' ? (nameById[x]||'Joueur') : (nameById[x.user_id]||'Joueur'));
+        const reason = (withReason && x.raison) ? ` <span style="color:#9A7A70;font-weight:400">— ${escHtml(x.raison)}</span>` : '';
+        return `<div style="font-size:12px;padding:2px 0">${nm}${reason}</div>`;
+      }).join('') + `</div>`;
+  };
+
+  const details = `<details style="margin-top:6px">
+    <summary style="font-size:11px;font-weight:700;color:#2E86AB;cursor:pointer;padding:4px 0">Voir le détail nominatif</summary>
+    ${listCat('✅ Présents', '#1A8C6E', byStatut.present, false)}
+    ${listCat('❌ Absents', '#C0392B', byStatut.absent, true)}
+    ${listCat('❓ Incertains', '#D4841A', byStatut.incertain, true)}
+    ${listCat('⏳ Sans réponse', '#9A7A70', noResp, false)}
+  </details>`;
+
+  const relance = noResp.length
+    ? `<button onclick="relanceAttendance(${ev.id},${teamId},'${(ev.titre||'').replace(/'/g,"\\'")}','${ev.date}')" style="width:100%;background:#D4841A18;border:1px solid #D4841A44;border-radius:8px;padding:8px;font-size:12px;font-weight:700;color:#D4841A;margin-top:8px">🔔 Relancer les ${noResp.length} sans-réponse</button>`
+    : '';
+
+  return counters + details + relance;
+}
+
+async function relanceAttendance(eventId, teamId, titre, date){
+  const ids = _attendanceNoResp[eventId] || [];
+  if(!ids.length){ showToast('Tout le monde a répondu 👍', 'success'); return; }
+  const team = myTeams.find(t => t.id === teamId);
+  sendPushToTeam(teamId, '🔔 ' + (team?.name||'Rugby Perf'),
+    'Réponds à l\'événement : ' + (titre||'') + ' — ' + fmtFull(date) + ' 🏉', ids);
+  showToast('Relance envoyée à ' + ids.length + ' joueur' + (ids.length>1?'s':''), 'success');
 }
 
 async function loadManagerOverview(teamId){
@@ -2693,17 +2748,31 @@ async function loadManagerOverview(teamId){
 
   const {data: upcomingEvents} = await sb.from('team_events').select('*').eq('team_id', teamId).gte('date', today()).order('date', {ascending:true}).limit(5);
   if(upcomingEvents?.length){
+    // Réponses de présence pour ces événements (une seule requête)
+    const upIds = upcomingEvents.map(e => e.id);
+    let attByEvent = {};
+    try {
+      const {data: attRows} = await sb.from('team_event_attendance').select('*').in('team_event_id', upIds);
+      (attRows||[]).forEach(r => { (attByEvent[r.team_event_id] = attByEvent[r.team_event_id] || []).push(r); });
+    } catch(e){}
+    const nameById = {}; playerList.forEach(p => nameById[p.id] = ((p.nom||'')+' '+(p.nom_famille||'')).trim() || 'Joueur');
+
     html += `<div class="sec-title">📅 Prochains événements</div>`;
     upcomingEvents.forEach(ev => {
       const isMatch = ev.type === 'match';
-      html += `<div class="card" style="display:flex;align-items:center;gap:10px">
-        <span style="font-size:18px">${isMatch?'⚔️':'🏉'}</span>
-        <div style="flex:1">
-          <div style="font-size:13px;font-weight:700">${isMatch?'Match vs '+ev.titre:ev.titre}</div>
-          <div style="font-size:11px;color:#9A7A70">${fmt(ev.date)}${ev.heure?' · '+ev.heure:''}</div>
+      const icon = isMatch ? '⚔️' : ev.type === 'autre' ? '📌' : '🏉';
+      const label = isMatch ? 'Match vs '+ev.titre : ev.titre;
+      html += `<div class="card">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:18px">${icon}</span>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:700">${escHtml(label||'')}</div>
+            <div style="font-size:11px;color:#9A7A70">${fmt(ev.date)}${ev.heure?' · '+ev.heure:''}</div>
+          </div>
+          <button onclick="openEditTeamEvent(${ev.id},${teamId})" style="background:none;border:none;color:#2E86AB;font-size:15px;padding:4px 6px">✏️</button>
+          <button onclick="deleteTeamEvent(${ev.id},${teamId})" style="background:none;border:none;color:#C0392B;font-size:15px;padding:4px 6px">🗑️</button>
         </div>
-        <button onclick="openEditTeamEvent(${ev.id},${teamId})" style="background:none;border:none;color:#2E86AB;font-size:15px;padding:4px 6px">✏️</button>
-        <button onclick="deleteTeamEvent(${ev.id},${teamId})" style="background:none;border:none;color:#C0392B;font-size:15px;padding:4px 6px">🗑️</button>
+        ${renderManagerAttendance(ev, attByEvent[ev.id]||[], nameById, userIds, teamId)}
       </div>`;
     });
   }
