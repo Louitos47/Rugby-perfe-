@@ -5249,29 +5249,25 @@ function renderEquipe(){
     ${canManage?`<button onclick="openTeamManage()" style="background:#F5EEE8;border:1px solid #E8D8D0;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;color:#1A0A0A;flex-shrink:0">⚙️ Gérer</button>`:''}
   </div>`;
 
-  // Cellule médicale — accès rapide réservé aux joueurs (le dossier médical
-  // personnel complet reste dans Plus → Médical, inchangé)
-  if(activeTeam.myRole === 'joueur'){
-    html += `<div class="card" style="border-color:#C0185A33;background:#C0185A08;padding:12px 14px;margin-bottom:10px">
-      <div style="font-size:13px;font-weight:800;color:#C0185A;margin-bottom:2px">🩺 Cellule médicale</div>
-      <div style="font-size:11px;color:#9A7A70;line-height:1.4;margin-bottom:10px">Échange privé avec le staff médical — invisible pour tes coéquipiers.</div>
-      <div style="display:flex;gap:8px">
-        <button onclick="openInjuryModal()" style="flex:1;background:#C0392B;color:#fff;border:none;border-radius:10px;padding:10px 6px;font-weight:800;font-size:12px">🩹 Signaler une blessure</button>
-        <button onclick="openMedicalDmFromTeam()" style="flex:1;background:#C0185A;color:#fff;border:none;border-radius:10px;padding:10px 6px;font-weight:800;font-size:12px">🩺 Écrire au médical</button>
-      </div>
-    </div>`;
-  }
-
-  // Barre de 3 onglets
+  // Barre d'onglets — 🩺 Médical n'apparaît que pour les joueurs
   const tabs = [{id:'chat',icon:'💬',label:'Chat'},{id:'projet',icon:'📄',label:'Projet'},{id:'adversaire',icon:'⚔️',label:'Adversaire'}];
+  if(activeTeam.myRole === 'joueur') tabs.push({id:'medical',icon:'🩺',label:'Médical'});
+  // Si l'onglet actif n'existe pas pour ce rôle, revenir au Chat
+  if(!tabs.some(t => t.id === _equipeTab)) _equipeTab = 'chat';
   html += `<div style="display:flex;gap:6px;margin-bottom:12px">` + tabs.map(t=>{
     const active = _equipeTab===t.id;
     const badge = (t.id==='chat' && unreadCounts.chat) ? `<span style="background:#FF3B30;color:#fff;border-radius:20px;min-width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;padding:0 4px;margin-left:4px">${unreadCounts.chat>99?'99+':unreadCounts.chat}</span>` : '';
-    return `<button onclick="switchEquipeTab('${t.id}')" style="flex:1;padding:9px 4px;border-radius:10px;border:2px solid ${active?'#2E86AB':'#E8D8D0'};background:${active?'#2E86AB18':'#F5EEE8'};font-size:12px;font-weight:700;color:${active?'#2E86AB':'#9A7A70'}">${t.icon} ${t.label}${badge}</button>`;
+    return `<button onclick="switchEquipeTab('${t.id}')" style="flex:1;padding:9px 3px;border-radius:10px;border:2px solid ${active?'#2E86AB':'#E8D8D0'};background:${active?'#2E86AB18':'#F5EEE8'};font-size:11px;font-weight:700;color:${active?'#2E86AB':'#9A7A70'}">${t.icon} ${t.label}${badge}</button>`;
   }).join('') + `</div>`;
 
   // Contenu de l'onglet actif
-  if(_equipeTab === 'chat'){
+  if(_equipeTab === 'medical'){
+    html += `<div style="border:1px solid #C0185A33;background:#C0185A08;border-radius:12px;padding:14px">
+      <div style="font-size:11px;color:#9A7A70;line-height:1.5;margin-bottom:12px">Échange privé avec le staff médical — invisible pour tes coéquipiers.</div>
+      <button onclick="openInjuryModal()" style="width:100%;background:#C0392B;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:14px;margin-bottom:8px">🩹 Signaler une blessure</button>
+      <button onclick="openMedicalDmFromTeam()" style="width:100%;background:#C0185A;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:14px">🩺 Écrire au médical</button>
+    </div>`;
+  } else if(_equipeTab === 'chat'){
     // Réutilise le rendu du chat existant (canaux, privés, notifications intacts)
     html += '<div id="chat-channels-bar"></div>' +
       '<div id="chat-messages" style="min-height:300px;max-height:52vh;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
