@@ -3594,6 +3594,49 @@ async function deleteChatChannel(id){
   showToast('Groupe supprimé', 'success');
 }
 
+// ── Helpers d'affichage du chat (style Messenger) ────────────────────────────
+// Couleur stable dérivée de l'identifiant/nom : un même membre garde toujours
+// la même couleur de pastille.
+function chatAvatarColor(seed){
+  const palette = ['#2E86AB','#8B1A1A','#1A8C6E','#D4841A','#7B2D8B','#C0185A','#2C6E49','#B5651D','#4A4E8C','#C0392B'];
+  const s = String(seed || '');
+  let h = 0;
+  for(let i=0;i<s.length;i++){ h = (h*31 + s.charCodeAt(i)) >>> 0; }
+  return palette[h % palette.length];
+}
+
+function chatInitials(name){
+  const parts = String(name||'').trim().split(/\s+/).filter(Boolean);
+  if(!parts.length) return '?';
+  if(parts.length === 1) return parts[0].slice(0,2).toUpperCase();
+  return (parts[0][0] + parts[parts.length-1][0]).toUpperCase();
+}
+
+// Avatar rond : photo de profil si dispo, sinon pastille aux initiales
+function chatAvatarHtml(profile, userId, name){
+  if(profile?.avatar_url){
+    return '<img src="' + profile.avatar_url + '" alt="" style="width:32px;height:32px;border-radius:50%;object-fit:cover;flex-shrink:0"/>';
+  }
+  return '<div style="width:32px;height:32px;border-radius:50%;flex-shrink:0;background:' + chatAvatarColor(userId || name) +
+    ';color:#fff;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800">' + chatInitials(name) + '</div>';
+}
+
+// Coins arrondis "chapelet" selon la position dans un bloc de messages consécutifs.
+// side='left' (autres) : côté groupé = gauche · side='right' (moi) : côté groupé = droite
+function chatBubbleRadius(side, isFirst, isLast){
+  const R = '15px', r = '5px';
+  if(isFirst && isLast) return R; // bulle seule
+  if(side === 'left'){
+    if(isFirst) return `${R} ${R} ${R} ${r}`;     // TL TR BR BL
+    if(isLast)  return `${r} ${R} ${R} ${R}`;
+    return `${r} ${R} ${R} ${r}`;
+  } else {
+    if(isFirst) return `${R} ${R} ${r} ${R}`;
+    if(isLast)  return `${R} ${r} ${R} ${R}`;
+    return `${R} ${r} ${r} ${R}`;
+  }
+}
+
 async function loadChatMessages(teamId){
   const container = document.getElementById('chat-messages');
   if(!container) return;
@@ -3613,18 +3656,57 @@ async function loadChatMessages(teamId){
   if(!msgsRaw?.length){ container.innerHTML = '<div style="text-align:center;color:#9A7A70;font-size:12px;padding:20px">Aucun message pour l\'instant.<br>Soyez le premier à écrire !</div>'; return; }
 
   const userIds = [...new Set(msgsRaw.map(m => m.user_id))];
-  const {data: profilesData} = await sb.from('profiles').select('id, nom, nom_famille').in('id', userIds);
+  const {data: profilesData} = await sb.from('profiles').select('id, nom, nom_famille, avatar_url').in('id', userIds);
   const pMap = {}; (profilesData||[]).forEach(p => pMap[p.id] = p);
 
-  container.innerHTML = msgsRaw.map(m => {
+  let html = '';
+  let lastDay = null;
+  msgsRaw.forEach((m, i) => {
     const isMe = m.user_id === currentUser.id;
     const p = pMap[m.user_id];
-    const name = p ? (p.nom||'') + ' ' + (p.nom_famille||'') : 'Membre';
-    return '<div style="margin-bottom:10px;text-align:' + (isMe?'right':'left') + '">' +
-      '<div style="font-size:10px;color:#9A7A70;margin-bottom:3px">' + (isMe?'Moi':name.trim()) + ' · ' + fmt(m.created_at.split('T')[0]) + '</div>' +
-      '<div style="display:inline-block;background:' + (isMe?'#2E86AB':'#FFFFFF') + ';color:' + (isMe?'#fff':'#1A0A0A') + ';border-radius:12px;border:1px solid ' + (isMe?'transparent':'#E8D8D0') + ';padding:8px 12px;font-size:13px;max-width:80%;text-align:left;line-height:1.4">' + m.message + '</div>' +
-      '</div>';
-  }).join('');
+    const name = p ? ((p.nom||'') + ' ' + (p.nom_famille||'')).trim() : 'Membre';
+    const day = m.created_at.split('T')[0];
+
+    // Séparateur de date quand on change de jour
+    if(day !== lastDay){
+      html += '<div style="text-align:center;margin:14px 0 10px"><span style="background:#E8D8D0;color:#9A7A70;font-size:10px;font-weight:700;padding:3px 12px;border-radius:20px">' + fmt(day) + '</span></div>';
+      lastDay = day;
+    }
+
+    // Regroupement : début/fin de bloc = changement d'auteur ou de jour
+    const prev = msgsRaw[i-1];
+    const next = msgsRaw[i+1];
+    const prevDay = prev ? prev.created_at.split('T')[0] : null;
+    const nextDay = next ? next.created_at.split('T')[0] : null;
+    const isFirst = !prev || prev.user_id !== m.user_id || prevDay !== day;
+    const isLast  = !next || next.user_id !== m.user_id || nextDay !== day;
+
+    const radius = chatBubbleRadius(isMe ? 'right' : 'left', isFirst, isLast);
+    const bubble = '<div style="display:inline-block;background:' + (isMe?'#2E86AB':'#FFFFFF') + ';color:' + (isMe?'#fff':'#1A0A0A') +
+      ';border-radius:' + radius + ';border:1px solid ' + (isMe?'transparent':'#E8D8D0') +
+      ';padding:8px 12px;font-size:13px;max-width:100%;text-align:left;line-height:1.4;word-break:break-word">' + m.message + '</div>';
+
+    // Espacement : serré dans un bloc, plus aéré entre deux auteurs
+    const marginTop = isFirst ? (html ? '10px' : '0') : '2px';
+
+    if(isMe){
+      html += '<div style="display:flex;justify-content:flex-end;margin-top:' + marginTop + '">' +
+        '<div style="max-width:80%;text-align:right">' + bubble + '</div></div>';
+    } else {
+      // Colonne avatar (affiché une seule fois, au premier message du bloc) + bulles
+      const avatarCol = isFirst
+        ? chatAvatarHtml(p, m.user_id, name)
+        : '<div style="width:32px;flex-shrink:0"></div>';
+      const nameLine = isFirst
+        ? '<div style="font-size:10px;color:#9A7A70;margin-bottom:3px;margin-left:2px">' + name + '</div>'
+        : '';
+      html += '<div style="display:flex;align-items:flex-end;gap:8px;margin-top:' + marginTop + '">' +
+        avatarCol +
+        '<div style="max-width:80%">' + nameLine + bubble + '</div></div>';
+    }
+  });
+
+  container.innerHTML = html;
   container.scrollTop = container.scrollHeight;
 }
 
