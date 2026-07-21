@@ -3510,6 +3510,16 @@ function openDmWith(userId, chatView){
   setView(chatView || 'equipe');
 }
 
+// Lance un DM privé avec le référent médical (rôle kine) de l'équipe active
+async function openMedicalDmFromTeam(){
+  const team = myTeams.find(t => t.id === activeTeamId) || myTeams[0];
+  if(!team) return;
+  const {data: members} = await sb.from('team_members').select('user_id, role').eq('team_id', team.id).eq('role', 'kine');
+  const medic = (members||[]).find(m => m.user_id !== currentUser?.id) || (members||[])[0];
+  if(!medic){ showToast('Aucun référent médical dans cette équipe pour l\'instant', 'error'); return; }
+  openDmWith(medic.user_id, 'equipe');
+}
+
 async function loadChatChannels(teamId){
   try {
     const {data} = await sb.from('chat_channels').select('*').eq('team_id', teamId).order('created_at', {ascending:true});
@@ -5237,6 +5247,19 @@ function renderEquipe(){
     ${canManage?`<button onclick="openTeamManage()" style="background:#F5EEE8;border:1px solid #E8D8D0;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;color:#1A0A0A;flex-shrink:0">⚙️ Gérer</button>`:''}
   </div>`;
 
+  // Cellule médicale — accès rapide réservé aux joueurs (le dossier médical
+  // personnel complet reste dans Plus → Médical, inchangé)
+  if(activeTeam.myRole === 'joueur'){
+    html += `<div class="card" style="border-color:#C0185A33;background:#C0185A08;padding:12px 14px;margin-bottom:10px">
+      <div style="font-size:13px;font-weight:800;color:#C0185A;margin-bottom:2px">🩺 Cellule médicale</div>
+      <div style="font-size:11px;color:#9A7A70;line-height:1.4;margin-bottom:10px">Échange privé avec le staff médical — invisible pour tes coéquipiers.</div>
+      <div style="display:flex;gap:8px">
+        <button onclick="openInjuryModal()" style="flex:1;background:#C0392B;color:#fff;border:none;border-radius:10px;padding:10px 6px;font-weight:800;font-size:12px">🩹 Signaler une blessure</button>
+        <button onclick="openMedicalDmFromTeam()" style="flex:1;background:#C0185A;color:#fff;border:none;border-radius:10px;padding:10px 6px;font-weight:800;font-size:12px">🩺 Écrire au médical</button>
+      </div>
+    </div>`;
+  }
+
   // Barre de 3 onglets
   const tabs = [{id:'chat',icon:'💬',label:'Chat'},{id:'projet',icon:'📄',label:'Projet'},{id:'adversaire',icon:'⚔️',label:'Adversaire'}];
   html += `<div style="display:flex;gap:6px;margin-bottom:12px">` + tabs.map(t=>{
@@ -5922,7 +5945,7 @@ async function saveInjury(id){
   }
 
   closeModal(); render();
-  showToast('Blessure enregistrée', 'success');
+  showToast('Entre les perches ✅ Le staff médical a été prévenu, tu seras recontacté.', 'success');
 }
 
 // ── DOSSIER MÉDICAL PARTAGÉ (photos / PDF entre joueur et staff médical) ─────
