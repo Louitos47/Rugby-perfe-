@@ -1271,7 +1271,9 @@ function render(){
   if(el) el.innerHTML = (views[currentView]||renderDashboard)();
 }
 
-const moreTabs = [{id:"athlete",icon:"🎯",label:"Tests & objectifs"},{id:"charges",icon:"🏋️",label:"Charges"},{id:"kine",icon:"🩺",label:"Médical"},{id:"planning",icon:"📅",label:"Matchs à venir"},{id:"calendar",icon:"🗓️",label:"Calendrier"},{id:"equipe",icon:"🤝",label:"Équipe"},{id:"chat_joueur",icon:"💬",label:"Chat équipe"}];
+// Équipe et Chat équipe ont quitté ce menu : ils sont désormais accessibles
+// via le bouton 🤝 Équipe de la barre du bas (espace équipe à onglets)
+const moreTabs = [{id:"athlete",icon:"🎯",label:"Tests & objectifs"},{id:"charges",icon:"🏋️",label:"Charges"},{id:"kine",icon:"🩺",label:"Médical"},{id:"planning",icon:"📅",label:"Matchs à venir"},{id:"calendar",icon:"🗓️",label:"Calendrier"}];
 
 function renderKineNav(){
   const navEl = document.getElementById('nav');
@@ -1363,14 +1365,18 @@ const MORE_TAB_BADGES = {chat_joueur: 'chat', equipe: 'docs', kine: 'medical'};
 function renderNav(){
   const navEl = document.getElementById('nav');
   if(!navEl) return;
-  const mainTabs=[{id:"dashboard",icon:"🏠",label:"Home"},{id:"agenda",icon:"🗓️",label:"Agenda"},{id:"moi",icon:"👤",label:"Moi"},{id:"more",icon:"···",label:"Plus"}];
+  const mainTabs=[{id:"dashboard",icon:"🏠",label:"Home"},{id:"agenda",icon:"🗓️",label:"Agenda"},{id:"equipe",icon:"🤝",label:"Équipe"},{id:"moi",icon:"👤",label:"Moi"},{id:"more",icon:"···",label:"Plus"}];
   const isMore = moreTabs.some(t=>t.id===currentView);
-  const totalUnread = (unreadCounts.chat||0) + (unreadCounts.docs||0) + (unreadCounts.medical||0);
+  // Le badge du bouton Plus ne compte plus que les catégories encore dans ce menu
+  const moreUnread = moreTabs.reduce((sum,t)=> sum + (unreadCounts[MORE_TAB_BADGES[t.id]]||0), 0);
   navEl.innerHTML=mainTabs.map(t=>{
     const isActive = t.id==="more" ? isMore : currentView===t.id;
+    let badge = '';
+    if(t.id==="more") badge = navBadge(moreUnread);
+    else if(t.id==="equipe") badge = navBadge(unreadCounts.chat||0);
     return `<button class="nav-btn ${isActive?"active":""}" onclick="${t.id==="more"?"toggleMore()":"setView('"+t.id+"')"}" style="position:relative">
       <span class="nav-icon" style="${t.id==="more"?"font-size:14px;letter-spacing:3px":""}">${t.icon}</span>${t.label}
-      ${t.id==="more" ? navBadge(totalUnread) : ''}
+      ${badge}
     </button>`;
   }).join('');
   let moreMenu = document.getElementById('more-menu');
@@ -1414,7 +1420,11 @@ function setView(v){
   currentView=v; showMoreMenu=false;
   // Ouvrir un onglet marque son contenu comme lu (pastilles rouges)
   if(v === 'chat_joueur'){ markSeen('chat'); unreadCounts.chat = 0; }
-  else if(v === 'equipe'){ markSeen('docs'); unreadCounts.docs = 0; }
+  else if(v === 'equipe'){
+    // L'espace équipe s'ouvre sur l'onglet Chat par défaut
+    _equipeTab = 'chat';
+    markSeen('chat'); unreadCounts.chat = 0;
+  }
   else if(v === 'kine'){ markSeen('medical'); unreadCounts.medical = 0; }
   render();
 }
@@ -3497,7 +3507,7 @@ async function startDm(userId){
 function openDmWith(userId, chatView){
   closeModal();
   _pendingDmUserId = userId;
-  setView(chatView || 'chat_joueur');
+  setView(chatView || 'equipe');
 }
 
 async function loadChatChannels(teamId){
@@ -5181,6 +5191,8 @@ function renderEquipeMatchHistory(){
   return html;
 }
 
+let _equipeTab = 'chat'; // onglet actif de l'espace équipe : 'chat' | 'projet' | 'adversaire'
+
 function renderEquipe(){
   let html = '';
 
@@ -5208,72 +5220,132 @@ function renderEquipe(){
     return html;
   }
 
-  html += `<div class="sec-title">Mes équipes</div>`;
-  myTeams.forEach(team => {
-    const roleInfo = TEAM_ROLES[team.myRole] || TEAM_ROLES.joueur;
-    const isActive = team.id === activeTeamId;
-    html += `<div onclick="setActiveTeam(${team.id})" style="background:#FFFFFF;border:2px solid ${isActive?roleInfo.color+'66':'#E8D8D0'};border-radius:14px;padding:16px;margin-bottom:10px;cursor:pointer">
-      <div style="display:flex;justify-content:space-between;align-items:center">
-        <div>
-          <div style="font-size:15px;font-weight:800">${team.name}</div>
-          <div style="font-size:11px;color:${roleInfo.color};font-weight:700;margin-top:2px">${roleInfo.icon} ${roleInfo.label}</div>
-        </div>
-        ${isActive ? '<span style="font-size:11px;background:'+roleInfo.color+';color:#fff;border-radius:20px;padding:3px 10px;font-weight:700">ACTIVE</span>' : ''}
+  const activeTeam = myTeams.find(t => t.id === activeTeamId) || myTeams[0];
+  const roleInfo = TEAM_ROLES[activeTeam.myRole] || TEAM_ROLES.joueur;
+  const canManage = activeTeam.created_by === currentUser?.id || activeTeam.myRole === 'manager';
+
+  // Bandeau équipe compact (tappable pour changer d'équipe s'il y en a plusieurs)
+  html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#FFFFFF;border:1px solid ${roleInfo.color}55;border-radius:12px;padding:9px 12px;margin-bottom:10px">
+    <div ${myTeams.length>1?'onclick="openTeamSwitcher()" style="cursor:pointer;display:flex;align-items:center;gap:8px;min-width:0"':'style="display:flex;align-items:center;gap:8px;min-width:0"'}>
+      <span style="font-size:18px">${roleInfo.icon}</span>
+      <div style="min-width:0">
+        <div style="font-size:14px;font-weight:800;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(activeTeam.name)}${myTeams.length>1?' <span style="color:#9A7A70;font-size:11px">▾</span>':''}</div>
+        <div style="font-size:10px;color:${roleInfo.color};font-weight:700">${roleInfo.label}</div>
       </div>
-    </div>`;
-  });
+      <span style="font-size:9px;background:${roleInfo.color};color:#fff;border-radius:20px;padding:2px 8px;font-weight:700;flex-shrink:0">ACTIVE</span>
+    </div>
+    ${canManage?`<button onclick="openTeamManage()" style="background:#F5EEE8;border:1px solid #E8D8D0;border-radius:8px;padding:6px 10px;font-size:12px;font-weight:700;color:#1A0A0A;flex-shrink:0">⚙️ Gérer</button>`:''}
+  </div>`;
 
-  const activeTeam = myTeams.find(t => t.id === activeTeamId);
-  if(activeTeam && (activeTeam.created_by === currentUser?.id || activeTeam.myRole === 'manager')){
-    html += `<div class="sec-title">Inviter dans « ${activeTeam.name} »</div>
-    <div class="card">
-      <div style="font-size:12px;color:#9A7A70;margin-bottom:12px">Génère un lien par rôle et partage-le à la bonne personne.</div>
-      <div id="team-invites-list">Chargement des invitations...</div>
-    </div>`;
-    // Déclenche le chargement après l'affichage du HTML, peu importe comment on est arrivé sur cet onglet
-    setTimeout(()=>loadTeamInvites(activeTeam.id), 0);
+  // Barre de 3 onglets
+  const tabs = [{id:'chat',icon:'💬',label:'Chat'},{id:'projet',icon:'📄',label:'Projet'},{id:'adversaire',icon:'⚔️',label:'Adversaire'}];
+  html += `<div style="display:flex;gap:6px;margin-bottom:12px">` + tabs.map(t=>{
+    const active = _equipeTab===t.id;
+    const badge = (t.id==='chat' && unreadCounts.chat) ? `<span style="background:#FF3B30;color:#fff;border-radius:20px;min-width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;padding:0 4px;margin-left:4px">${unreadCounts.chat>99?'99+':unreadCounts.chat}</span>` : '';
+    return `<button onclick="switchEquipeTab('${t.id}')" style="flex:1;padding:9px 4px;border-radius:10px;border:2px solid ${active?'#2E86AB':'#E8D8D0'};background:${active?'#2E86AB18':'#F5EEE8'};font-size:12px;font-weight:700;color:${active?'#2E86AB':'#9A7A70'}">${t.icon} ${t.label}${badge}</button>`;
+  }).join('') + `</div>`;
+
+  // Contenu de l'onglet actif
+  if(_equipeTab === 'chat'){
+    // Réutilise le rendu du chat existant (canaux, privés, notifications intacts)
+    html += '<div id="chat-channels-bar"></div>' +
+      '<div id="chat-messages" style="min-height:300px;max-height:52vh;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
+      '<div style="display:flex;gap:8px">' +
+      '<input class="input" id="chat-input" placeholder="Votre message..." style="flex:1"/>' +
+      '<button onclick="sendChatMessage()" style="background:#2E86AB;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700">➤</button>' +
+      '</div>';
+    setTimeout(()=>{
+      initChatView(activeTeam.id);
+      setTimeout(()=>{
+        const inp = document.getElementById('chat-input');
+        if(inp) inp.addEventListener('keydown', e=>{ if(e.key==='Enter') sendChatMessage(); });
+      }, 150);
+    }, 0);
+  } else {
+    html += `<div id="equipe-docs" style="min-height:200px">Chargement...</div>`;
+    setTimeout(()=>loadTeamDocsForPlayer(activeTeam.id, _equipeTab), 0);
   }
-
-  // Documents publiés par le staff (projet de jeu, analyses adverses)
-  html += `<div id="equipe-docs"></div>`;
-  const docsTeamId = activeTeamId || myTeams[0]?.id;
-  if(docsTeamId) setTimeout(()=>loadTeamDocsForPlayer(docsTeamId), 0);
 
   return html;
 }
 
-async function loadTeamDocsForPlayer(teamId){
+function switchEquipeTab(tab){
+  _equipeTab = tab;
+  if(tab === 'chat'){ markSeen('chat'); unreadCounts.chat = 0; }
+  else { markSeen('docs'); unreadCounts.docs = 0; }
+  render();
+}
+
+function openTeamSwitcher(){
+  const html = `<div class="modal-title">🤝 CHANGER D'ÉQUIPE</div>` +
+    myTeams.map(t => {
+      const ri = TEAM_ROLES[t.myRole] || TEAM_ROLES.joueur;
+      const active = t.id === activeTeamId;
+      return `<div onclick="setActiveTeam(${t.id});closeModal()" style="display:flex;align-items:center;gap:10px;padding:12px;border:2px solid ${active?ri.color+'66':'#E8D8D0'};border-radius:12px;margin-bottom:8px;cursor:pointer">
+        <span style="font-size:18px">${ri.icon}</span>
+        <div style="flex:1;min-width:0"><div style="font-size:14px;font-weight:800">${escHtml(t.name)}</div><div style="font-size:11px;color:${ri.color};font-weight:700">${ri.label}</div></div>
+        ${active?`<span style="font-size:10px;background:${ri.color};color:#fff;border-radius:20px;padding:2px 8px;font-weight:700">ACTIVE</span>`:''}
+      </div>`;
+    }).join('') +
+    `<button onclick="closeModal()" style="width:100%;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:10px;padding:12px;color:#9A7A70;font-weight:600;margin-top:4px">Fermer</button>`;
+  openModal(html);
+}
+
+function openTeamManage(){
+  const team = myTeams.find(t => t.id === activeTeamId) || myTeams[0];
+  if(!team) return;
+  const html = `<div class="modal-title">⚙️ GÉRER « ${escHtml(team.name)} »</div>
+    <div style="font-size:12px;color:#9A7A70;margin-bottom:12px">Génère un lien par rôle et partage-le à la bonne personne.</div>
+    <div id="team-invites-list">Chargement des invitations...</div>
+    <button onclick="closeModal()" style="width:100%;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:10px;padding:12px;color:#9A7A70;font-weight:600;margin-top:12px">Fermer</button>`;
+  openModal(html);
+  setTimeout(()=>loadTeamInvites(team.id), 0);
+}
+
+// only = 'projet' (documents) | 'adversaire' (analyses) | undefined (les deux)
+async function loadTeamDocsForPlayer(teamId, only){
   const container = document.getElementById('equipe-docs');
   if(!container || !teamId) return;
-  const [{data: docs}, {data: analyses}] = await Promise.all([
-    sb.from('team_documents').select('*').eq('team_id', teamId).order('created_at', {ascending:false}).limit(10),
-    sb.from('team_opponent_analysis').select('*').eq('team_id', teamId).order('created_at', {ascending:false}).limit(10)
+  const showProjet = !only || only === 'projet';
+  const showAdv = !only || only === 'adversaire';
+  const [docsRes, analysesRes] = await Promise.all([
+    showProjet ? sb.from('team_documents').select('*').eq('team_id', teamId).order('created_at', {ascending:false}).limit(10) : Promise.resolve({data:[]}),
+    showAdv ? sb.from('team_opponent_analysis').select('*').eq('team_id', teamId).order('created_at', {ascending:false}).limit(10) : Promise.resolve({data:[]})
   ]);
+  const docs = docsRes.data, analyses = analysesRes.data;
   let html = '';
-  if(docs?.length){
+  if(showProjet){
     html += `<div class="sec-title">📄 Projet de jeu</div>`;
-    docs.forEach(d => {
-      html += `<div class="card">
-        <div style="font-size:13px;font-weight:700">${escHtml(d.titre||'Document')}</div>
-        <div style="font-size:11px;color:#9A7A70;margin-top:2px">${fmt(d.created_at.split('T')[0])}</div>
-        ${d.contenu?`<div style="font-size:12px;line-height:1.5;margin-top:6px;white-space:pre-wrap">${escHtml(d.contenu)}</div>`:''}
-        ${d.pdf_url?`<a href="${d.pdf_url}" target="_blank" style="font-size:12px;color:#2E86AB;margin-top:6px;display:inline-block;font-weight:700">📎 Voir le PDF</a>`:''}
-      </div>`;
-    });
+    if(docs?.length){
+      docs.forEach(d => {
+        html += `<div class="card">
+          <div style="font-size:13px;font-weight:700">${escHtml(d.titre||'Document')}</div>
+          <div style="font-size:11px;color:#9A7A70;margin-top:2px">${fmt(d.created_at.split('T')[0])}</div>
+          ${d.contenu?`<div style="font-size:12px;line-height:1.5;margin-top:6px;white-space:pre-wrap">${escHtml(d.contenu)}</div>`:''}
+          ${d.pdf_url?`<a href="${d.pdf_url}" target="_blank" style="font-size:12px;color:#2E86AB;margin-top:6px;display:inline-block;font-weight:700">📎 Voir le PDF</a>`:''}
+        </div>`;
+      });
+    } else {
+      html += `<div class="card" style="text-align:center;padding:20px;color:#9A7A70;font-size:13px">Aucun document pour l'instant.</div>`;
+    }
   }
-  if(analyses?.length){
-    html += `<div class="sec-title">⚔️ Analyses adverses</div>`;
-    analyses.forEach(a => {
-      html += `<div class="card">
-        <div style="font-size:13px;font-weight:700">vs ${escHtml(a.adversaire||'')}</div>
-        <div style="font-size:11px;color:#9A7A70;margin-top:2px">${fmt(a.created_at.split('T')[0])}</div>
-        ${a.notes?`<div style="font-size:12px;line-height:1.5;margin-top:6px;white-space:pre-wrap">${escHtml(a.notes)}</div>`:''}
-        <div style="margin-top:6px">
-          ${a.youtube_url?`<a href="${a.youtube_url}" target="_blank" style="font-size:12px;color:#C0392B;font-weight:700;margin-right:12px">▶️ Vidéo</a>`:''}
-          ${a.pdf_url?`<a href="${a.pdf_url}" target="_blank" style="font-size:12px;color:#2E86AB;font-weight:700">📎 PDF</a>`:''}
-        </div>
-      </div>`;
-    });
+  if(showAdv){
+    html += `<div class="sec-title"${showProjet?' style="margin-top:16px"':''}>⚔️ Analyses adverses</div>`;
+    if(analyses?.length){
+      analyses.forEach(a => {
+        html += `<div class="card">
+          <div style="font-size:13px;font-weight:700">vs ${escHtml(a.adversaire||'')}</div>
+          <div style="font-size:11px;color:#9A7A70;margin-top:2px">${fmt(a.created_at.split('T')[0])}</div>
+          ${a.notes?`<div style="font-size:12px;line-height:1.5;margin-top:6px;white-space:pre-wrap">${escHtml(a.notes)}</div>`:''}
+          <div style="margin-top:6px">
+            ${a.youtube_url?`<a href="${a.youtube_url}" target="_blank" style="font-size:12px;color:#C0392B;font-weight:700;margin-right:12px">▶️ Vidéo</a>`:''}
+            ${a.pdf_url?`<a href="${a.pdf_url}" target="_blank" style="font-size:12px;color:#2E86AB;font-weight:700">📎 PDF</a>`:''}
+          </div>
+        </div>`;
+      });
+    } else {
+      html += `<div class="card" style="text-align:center;padding:20px;color:#9A7A70;font-size:13px">Aucune analyse pour l'instant.</div>`;
+    }
   }
   container.innerHTML = html;
 }
