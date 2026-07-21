@@ -304,6 +304,7 @@ let myTeams = []; // équipes dont l'utilisateur est membre
 let teamEvents = []; // événements d'équipe partagés (matchs/entraînements importés par le manager)
 let teamAnnouncements = []; // annonces rapides du manager
 let teamEventBilans = {}; // {team_event_id: bilan} pour le joueur connecté
+let teamEventAttendance = {}; // {team_event_id: {statut, raison, team_id}} réponse de présence du joueur
 let matchStatsMap = {}; // {team_event_id: stats} stats de match d'équipe
 let playerMatchNotes = {};
 let _piedMode = 'but';
@@ -621,6 +622,12 @@ async function loadAllData(){
           const {data: bilans} = await sb.from('team_event_bilans').select('*').eq('user_id', uid).in('team_event_id', ids);
           teamEventBilans = {};
           (bilans||[]).forEach(b => teamEventBilans[b.team_event_id] = b);
+          // Réponses de présence du joueur (même logique que les bilans)
+          try {
+            const {data: att} = await sb.from('team_event_attendance').select('*').eq('user_id', uid).in('team_event_id', ids);
+            teamEventAttendance = {};
+            (att||[]).forEach(a => teamEventAttendance[a.team_event_id] = a);
+          } catch(e){ teamEventAttendance = {}; }
         }
       }
     } catch(e) { teamEventBilans = {}; }
@@ -1459,6 +1466,69 @@ function renderPlayerMatchNoteBtn(teamEventId, adversaire){
   return "<button onclick=\"openPlayerMatchNote(" + teamEventId + ",'" + adversaire.replace(/'/g,"&apos;") + "')\" style=\"width:100%;background:#8B1A1A;color:#fff;border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:700;margin-top:6px\">🏉 Noter ma performance</button>";
 }
 
+// ── PRÉSENCE AUX ÉVÉNEMENTS D'ÉQUIPE (côté joueur) ───────────────────────────
+// Bloc de 3 boutons ✅/❌/❓ + champ raison optionnel si absent/incertain.
+function renderAttendanceBlock(teamEventId){
+  const a = teamEventAttendance[teamEventId];
+  const cur = a?.statut || null;
+  const opt = (val, icon, label, color) => {
+    const active = cur === val;
+    return `<button onclick="setAttendance(${teamEventId},'${val}')" style="flex:1;padding:8px 4px;border-radius:8px;border:2px solid ${active?color:'#E8D8D0'};background:${active?color+'18':'#F5EEE8'};font-size:12px;font-weight:700;color:${active?color:'#9A7A70'}">${icon} ${label}</button>`;
+  };
+  let html = `<div style="display:flex;gap:6px;margin-top:8px">${opt('present','✅','Présent','#1A8C6E')}${opt('absent','❌','Absent','#C0392B')}${opt('incertain','❓','Incertain','#D4841A')}</div>`;
+  if(cur === 'absent' || cur === 'incertain'){
+    const raison = (a?.raison||'').replace(/"/g,'&quot;');
+    html += `<input class="input" id="att-reason-${teamEventId}" placeholder="Préciser (facultatif)" value="${raison}" onchange="saveAttendanceReason(${teamEventId})" style="margin-top:6px;font-size:12px"/>`;
+  }
+  return html;
+}
+
+async function setAttendance(teamEventId, statut){
+  const raw = teamEvents.find(e => e.id == teamEventId);
+  const teamId = raw?.team_id || myTeams.find(t => t.myRole === 'joueur')?.id || myTeams[0]?.id || null;
+  const prev = teamEventAttendance[teamEventId] || {};
+  const raison = statut === 'present' ? null : (prev.raison || null);
+  const row = {team_event_id: teamEventId, user_id: currentUser.id, team_id: teamId, statut, raison, updated_at: new Date().toISOString()};
+  const {error} = await sb.from('team_event_attendance').upsert(row, {onConflict: 'team_event_id,user_id'});
+  if(error){ showToast('Erreur : '+error.message, 'error'); return; }
+  teamEventAttendance[teamEventId] = row;
+  render();
+}
+
+// Sauvegarde silencieuse de la raison (pas de re-render pour ne pas perdre le focus)
+async function saveAttendanceReason(teamEventId){
+  const a = teamEventAttendance[teamEventId];
+  if(!a) return;
+  const raison = document.getElementById('att-reason-'+teamEventId)?.value.trim() || null;
+  a.raison = raison;
+  await sb.from('team_event_attendance').upsert({team_event_id: teamEventId, user_id: currentUser.id, team_id: a.team_id, statut: a.statut, raison, updated_at: new Date().toISOString()}, {onConflict: 'team_event_id,user_id'});
+}
+
+// Encart d'accueil : présence à confirmer sur les prochains événements
+function renderAttendanceReminder(){
+  if(!myTeams.length) return '';
+  if(!myTeams.some(t => t.myRole === 'joueur')) return '';
+  const upcoming = teamEvents.filter(e => e.date >= today()).sort((a,b)=>a.date.localeCompare(b.date)).slice(0,5);
+  if(!upcoming.length) return '';
+  let html = `<div style="background:#1A8C6E0C;border:1px solid #1A8C6E44;border-radius:14px;padding:14px 16px;margin-bottom:12px">
+    <div style="font-size:13px;font-weight:800;color:#1A8C6E;margin-bottom:10px">🙋 Ta présence</div>`;
+  upcoming.forEach(e => {
+    const isMatch = e.type === 'match';
+    html += `<div style="background:#FFFFFF;border:1px solid #1A8C6E22;border-radius:10px;padding:10px 12px;margin-bottom:8px">
+      <div style="display:flex;align-items:center;gap:8px">
+        <span style="font-size:16px">${isMatch?'⚔️':'🏉'}</span>
+        <div>
+          <div style="font-size:13px;font-weight:700">${isMatch?'Match vs '+(e.titre||''):e.titre||'Entraînement collectif'}</div>
+          <div style="font-size:11px;color:#9A7A70">${fmt(e.date)}${e.heure?' · '+e.heure:''}</div>
+        </div>
+      </div>
+      ${renderAttendanceBlock(e.id)}
+    </div>`;
+  });
+  html += '</div>';
+  return html;
+}
+
 function renderBilansReminder(){
   if(!myTeams.length) return '';
   // Événements d'équipe récents (7 derniers jours) sans bilan rempli
@@ -1502,6 +1572,7 @@ function renderDashboard(){
   html += renderMatchReportsBar();
   html += renderProposedSessionsInbox();
   html += renderNotifTutoCard();
+  html += renderAttendanceReminder();
   html += renderBilansReminder();
   html += renderTodayReminders();
   html += renderFormeDashboard();
@@ -1727,6 +1798,7 @@ function renderAgenda(){
             </div>
             <span style="font-size:10px;font-weight:800;background:#2E86AB18;color:#2E86AB;border-radius:20px;padding:3px 10px">🏉 Équipe</span>
           </div>
+          ${renderAttendanceBlock(e.team_event_id)}
           ${hasBilan
             ? `<button onclick="openTeamEventBilan(${e.team_event_id}, '${isMatch?'match':'terrain'}')" style="width:100%;background:#1A8C6E18;border:1px solid #1A8C6E44;border-radius:8px;padding:9px;font-size:12px;font-weight:700;margin-top:8px;color:#1A8C6E">✓ Bilan rempli — Modifier</button>`
             : `<button onclick="openTeamEventBilan(${e.team_event_id}, '${isMatch?'match':'terrain'}')" style="width:100%;background:#2E86AB;color:#fff;border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:700;margin-top:8px">📝 Remplir mon bilan</button>`
