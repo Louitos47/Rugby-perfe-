@@ -2287,7 +2287,8 @@ async function loadPrepaPlayers(teamId){
     (aptData||[]).forEach(a => { if(a.apte_au_jeu === false) aptStatusByPlayer[a.user_id] = false; });
   } catch(e){}
   try {
-    const {data: injStatus} = await sb.from('injuries').select('user_id, statut, type').neq('statut', 'gueri');
+    // Vue restreinte : n'expose que type/durée/statut/aptitude (jamais les notes ni documents cliniques)
+    const {data: injStatus} = await sb.from('manager_injury_view').select('user_id, statut, type').neq('statut', 'gueri');
     (injStatus||[]).forEach(i => {
       if(i.type){ if(!injuriesByPlayer[i.user_id]) injuriesByPlayer[i.user_id] = []; injuriesByPlayer[i.user_id].push(i.type); }
     });
@@ -2560,7 +2561,8 @@ async function loadManagerOverview(teamId){
     (aptData||[]).forEach(a => { if(a.apte_au_jeu === false) aptStatusByPlayer[a.user_id] = false; });
   } catch(e){}
   try {
-    const {data: injStatus} = await sb.from('injuries').select('user_id, statut, type').neq('statut', 'gueri');
+    // Vue restreinte : n'expose que type/durée/statut/aptitude (jamais les notes ni documents cliniques)
+    const {data: injStatus} = await sb.from('manager_injury_view').select('user_id, statut, type, duree_estimee_jours').neq('statut', 'gueri');
     (injStatus||[]).forEach(i => {
       if(i.type){ if(!mgrInjuriesByPlayer[i.user_id]) mgrInjuriesByPlayer[i.user_id] = []; mgrInjuriesByPlayer[i.user_id].push(i.type); }
     });
