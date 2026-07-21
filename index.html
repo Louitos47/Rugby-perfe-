@@ -2718,35 +2718,13 @@ async function loadManagerOverview(teamId){
 
   const totalPlayers = playerList.length;
   const nonAptCount = playerList.filter(p => aptStatusByPlayer[p.id] === false).length;
+  const nameById = {}; playerList.forEach(p => nameById[p.id] = ((p.nom||'')+' '+(p.nom_famille||'')).trim() || 'Joueur');
 
-  let html = `<div class="stat-row">
-    <div class="stat-box"><div class="stat-val" style="color:#2E86AB">${totalPlayers}</div><div class="stat-lbl">Effectif</div></div>
-    <div class="stat-box"><div class="stat-val" style="color:#C0392B">${nonAptCount}</div><div class="stat-lbl">Non aptes</div></div>
-  </div>`;
+  let html = '';
 
-  // Prochains événements d'équipe (matchs/entraînements importés via TeamPulse)
-  // Matchs passés pour saisie des stats
-  const {data: pastMatches} = await sb.from('team_events').select('*').eq('team_id', teamId).eq('type', 'match').lt('date', today()).order('date', {ascending:false}).limit(5);
-  if(pastMatches?.length){
-    html += `<div class="sec-title">⚔️ Matchs récents</div>`;
-    pastMatches.forEach(ev => {
-      const hasStats = matchStatsMap[ev.id];
-      const stats = hasStats ? matchStatsMap[ev.id] : null;
-      const result = stats ? (stats.score_pour > stats.score_contre ? '✅' : stats.score_pour < stats.score_contre ? '❌' : '🤝') : '';
-      html += `<div class="card">
-        <div style="display:flex;align-items:center;gap:10px">
-          <span style="font-size:18px">⚔️</span>
-          <div style="flex:1">
-            <div style="font-size:13px;font-weight:700">vs ${ev.titre}</div>
-            <div style="font-size:11px;color:#9A7A70">${fmt(ev.date)} ${stats ? result+' '+stats.score_pour+'-'+stats.score_contre : '— stats non saisies'}</div>
-          </div>
-          <button onclick="openMatchStatsForm(${ev.id}, '${ev.titre.replace(/'/g,"\\'")}') " style="background:${hasStats?'#1A8C6E18':'#8B1A1A'};color:${hasStats?'#1A8C6E':'#fff'};border:none;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700">${hasStats?'✏️ Modifier':'📊 Saisir stats'}</button>
-        </div>
-      </div>`;
-    });
-  }
-
+  // ── 1. À VENIR (section la plus visible) ─────────────────────────────────
   const {data: upcomingEvents} = await sb.from('team_events').select('*').eq('team_id', teamId).gte('date', today()).order('date', {ascending:true}).limit(5);
+  html += `<div style="font-size:13px;font-weight:800;color:#1A0A0A;letter-spacing:1px;margin:4px 0 10px">📅 À VENIR</div>`;
   if(upcomingEvents?.length){
     // Réponses de présence pour ces événements (une seule requête)
     const upIds = upcomingEvents.map(e => e.id);
@@ -2755,28 +2733,37 @@ async function loadManagerOverview(teamId){
       const {data: attRows} = await sb.from('team_event_attendance').select('*').in('team_event_id', upIds);
       (attRows||[]).forEach(r => { (attByEvent[r.team_event_id] = attByEvent[r.team_event_id] || []).push(r); });
     } catch(e){}
-    const nameById = {}; playerList.forEach(p => nameById[p.id] = ((p.nom||'')+' '+(p.nom_famille||'')).trim() || 'Joueur');
 
-    html += `<div class="sec-title">📅 Prochains événements</div>`;
     upcomingEvents.forEach(ev => {
       const isMatch = ev.type === 'match';
+      // Code couleur : rouge = match, bleu = entraînement, violet = autre
+      const accent = isMatch ? '#C0392B' : ev.type === 'autre' ? '#7B2D8B' : '#2E86AB';
       const icon = isMatch ? '⚔️' : ev.type === 'autre' ? '📌' : '🏉';
       const label = isMatch ? 'Match vs '+ev.titre : ev.titre;
-      html += `<div class="card">
+      html += `<div class="card" style="border-color:${accent}44;border-left:4px solid ${accent}">
         <div style="display:flex;align-items:center;gap:10px">
           <span style="font-size:18px">${icon}</span>
           <div style="flex:1">
-            <div style="font-size:13px;font-weight:700">${escHtml(label||'')}</div>
-            <div style="font-size:11px;color:#9A7A70">${fmt(ev.date)}${ev.heure?' · '+ev.heure:''}</div>
+            <div style="font-size:14px;font-weight:800;color:${accent}">${escHtml(label||'')}</div>
+            <div style="font-size:11px;color:#9A7A70">${fmtFull(ev.date)}${ev.heure?' · '+ev.heure:''}</div>
           </div>
-          <button onclick="openEditTeamEvent(${ev.id},${teamId})" style="background:none;border:none;color:#2E86AB;font-size:15px;padding:4px 6px">✏️</button>
+          <button onclick="openEditTeamEvent(${ev.id},${teamId})" style="background:none;border:none;color:#9A7A70;font-size:15px;padding:4px 6px">✏️</button>
           <button onclick="deleteTeamEvent(${ev.id},${teamId})" style="background:none;border:none;color:#C0392B;font-size:15px;padding:4px 6px">🗑️</button>
         </div>
         ${renderManagerAttendance(ev, attByEvent[ev.id]||[], nameById, userIds, teamId)}
       </div>`;
     });
+  } else {
+    html += `<div class="card" style="text-align:center;padding:18px;color:#9A7A70;font-size:13px">Aucun événement à venir — crée un match, un entraînement ou un autre événement ci-dessus.</div>`;
   }
 
+  // ── 2. Compteurs effectif / non aptes (compacts) ─────────────────────────
+  html += `<div class="stat-row" style="margin-top:6px">
+    <div class="stat-box"><div class="stat-val" style="color:#2E86AB">${totalPlayers}</div><div class="stat-lbl">Effectif</div></div>
+    <div class="stat-box"><div class="stat-val" style="color:${nonAptCount>0?'#C0392B':'#1A8C6E'}">${nonAptCount}</div><div class="stat-lbl">Non aptes</div></div>
+  </div>`;
+
+  // ── 3. Joueurs ───────────────────────────────────────────────────────────
   html += `<div class="sec-title">Joueurs</div>`;
   playerList.forEach(p => {
     const isApte = aptStatusByPlayer[p.id] !== false;
@@ -2790,6 +2777,25 @@ async function loadManagerOverview(teamId){
       <span style="font-size:10px;font-weight:800;border-radius:20px;padding:3px 10px;background:${isApte?'#1A8C6E18':'#C0392B18'};color:${isApte?'#1A8C6E':'#C0392B'}">${isApte?'✓ Apte':'⚠️ Non apte'}</span>
     </div>`;
   });
+
+  // ── 4. Matchs à débriefer (secondaire, atténué) — matchs passés sans stats ─
+  const {data: pastMatches} = await sb.from('team_events').select('*').eq('team_id', teamId).eq('type', 'match').lt('date', today()).order('date', {ascending:false}).limit(5);
+  const toDebrief = (pastMatches||[]).filter(ev => !matchStatsMap[ev.id]);
+  if(toDebrief.length){
+    html += `<div class="sec-title" style="color:#9A7A70;margin-top:20px">Matchs à débriefer</div>`;
+    toDebrief.forEach(ev => {
+      html += `<div class="card" style="background:#F5EEE8;border-color:#E8D8D0;opacity:0.85">
+        <div style="display:flex;align-items:center;gap:10px">
+          <span style="font-size:16px;filter:grayscale(1)">⚔️</span>
+          <div style="flex:1">
+            <div style="font-size:13px;font-weight:600;color:#6A5A54">vs ${escHtml(ev.titre||'')}</div>
+            <div style="font-size:11px;color:#9A7A70">${fmt(ev.date)} · stats non saisies</div>
+          </div>
+          <button onclick="openMatchStatsForm(${ev.id}, '${(ev.titre||'').replace(/'/g,"\\'")}')" style="background:#9A7A7018;color:#6A5A54;border:1px solid #E8D8D0;border-radius:8px;padding:6px 10px;font-size:11px;font-weight:700">📊 Saisir stats</button>
+        </div>
+      </div>`;
+    });
+  }
 
   container.innerHTML = html;
 }
