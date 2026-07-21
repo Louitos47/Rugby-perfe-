@@ -1268,7 +1268,28 @@ function render(){
   renderPhaseBadge();
   const views={dashboard:renderDashboard,agenda:renderAgenda,moi:renderMoi,programme:renderProgramme,planning:renderPlanning,charges:renderCharges,kine:renderKine,calendar:renderCalendar,stats:renderStats,forme:renderForme,athlete:renderAthlete,equipe:renderEquipe,chat_joueur:renderChatJoueur};
   const el = document.getElementById('content');
+  // Réinitialise le mode "chat plein écran" avant chaque rendu (réactivé par
+  // renderEquipe uniquement sur l'onglet Chat)
+  setContentChatLayout(false);
   if(el) el.innerHTML = (views[currentView]||renderDashboard)();
+}
+
+// Bascule le conteneur principal en colonne flex (messages seuls défilent,
+// onglets figés en haut, barre d'envoi figée en bas) ou revient au scroll normal
+function setContentChatLayout(on){
+  const el = document.getElementById('content');
+  if(!el) return;
+  if(on){
+    el.style.display = 'flex';
+    el.style.flexDirection = 'column';
+    el.style.overflow = 'hidden';
+    el.style.paddingBottom = 'calc(74px + env(safe-area-inset-bottom))';
+  } else {
+    el.style.display = '';
+    el.style.flexDirection = '';
+    el.style.overflow = '';
+    el.style.paddingBottom = '';
+  }
 }
 
 // Équipe et Chat équipe ont quitté ce menu : ils sont désormais accessibles
@@ -5237,7 +5258,7 @@ function renderEquipe(){
   const canManage = activeTeam.created_by === currentUser?.id || activeTeam.myRole === 'manager';
 
   // Bandeau équipe compact (tappable pour changer d'équipe s'il y en a plusieurs)
-  html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#FFFFFF;border:1px solid ${roleInfo.color}55;border-radius:12px;padding:9px 12px;margin-bottom:10px">
+  html += `<div style="display:flex;align-items:center;justify-content:space-between;gap:8px;background:#FFFFFF;border:1px solid ${roleInfo.color}55;border-radius:12px;padding:9px 12px;margin-bottom:10px;flex-shrink:0">
     <div ${myTeams.length>1?'onclick="openTeamSwitcher()" style="cursor:pointer;display:flex;align-items:center;gap:8px;min-width:0"':'style="display:flex;align-items:center;gap:8px;min-width:0"'}>
       <span style="font-size:18px">${roleInfo.icon}</span>
       <div style="min-width:0">
@@ -5254,7 +5275,7 @@ function renderEquipe(){
   if(activeTeam.myRole === 'joueur') tabs.push({id:'medical',icon:'🩺',label:'Médical'});
   // Si l'onglet actif n'existe pas pour ce rôle, revenir au Chat
   if(!tabs.some(t => t.id === _equipeTab)) _equipeTab = 'chat';
-  html += `<div style="display:flex;gap:6px;margin-bottom:12px">` + tabs.map(t=>{
+  html += `<div style="display:flex;gap:6px;margin-bottom:12px;flex-shrink:0">` + tabs.map(t=>{
     const active = _equipeTab===t.id;
     const badge = (t.id==='chat' && unreadCounts.chat) ? `<span style="background:#FF3B30;color:#fff;border-radius:20px;min-width:16px;height:16px;display:inline-flex;align-items:center;justify-content:center;font-size:9px;font-weight:800;padding:0 4px;margin-left:4px">${unreadCounts.chat>99?'99+':unreadCounts.chat}</span>` : '';
     return `<button onclick="switchEquipeTab('${t.id}')" style="flex:1;padding:9px 3px;border-radius:10px;border:2px solid ${active?'#2E86AB':'#E8D8D0'};background:${active?'#2E86AB18':'#F5EEE8'};font-size:11px;font-weight:700;color:${active?'#2E86AB':'#9A7A70'}">${t.icon} ${t.label}${badge}</button>`;
@@ -5268,14 +5289,17 @@ function renderEquipe(){
       <button onclick="openMedicalDmFromTeam()" style="width:100%;background:#C0185A;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:14px">🩺 Écrire au médical</button>
     </div>`;
   } else if(_equipeTab === 'chat'){
-    // Réutilise le rendu du chat existant (canaux, privés, notifications intacts)
-    html += '<div id="chat-channels-bar"></div>' +
-      '<div id="chat-messages" style="min-height:300px;max-height:52vh;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
-      '<div style="display:flex;gap:8px">' +
+    // Réutilise le rendu du chat existant (canaux, privés, notifications intacts).
+    // Layout figé : la barre de canaux et l'envoi ne bougent pas, seuls les
+    // messages défilent (flex:1 dans le conteneur passé en mode chat).
+    html += '<div id="chat-channels-bar" style="flex-shrink:0"></div>' +
+      '<div id="chat-messages" style="flex:1 1 auto;min-height:0;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
+      '<div style="display:flex;gap:8px;flex-shrink:0">' +
       '<input class="input" id="chat-input" placeholder="Votre message..." style="flex:1"/>' +
       '<button onclick="sendChatMessage()" style="background:#2E86AB;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700">➤</button>' +
       '</div>';
     setTimeout(()=>{
+      setContentChatLayout(true);
       initChatView(activeTeam.id);
       setTimeout(()=>{
         const inp = document.getElementById('chat-input');
