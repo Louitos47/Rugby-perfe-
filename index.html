@@ -3656,7 +3656,10 @@ async function loadChatMessages(teamId){
   if(!msgsRaw?.length){ container.innerHTML = '<div style="text-align:center;color:#9A7A70;font-size:12px;padding:20px">Aucun message pour l\'instant.<br>Soyez le premier à écrire !</div>'; return; }
 
   const userIds = [...new Set(msgsRaw.map(m => m.user_id))];
-  const {data: profilesData} = await sb.from('profiles').select('id, nom, nom_famille, avatar_url').in('id', userIds);
+  const {data: profilesData, error: profErr} = await sb.from('profiles').select('id, nom, nom_famille, avatar_url').in('id', userIds);
+  // Diag : si la liste revient vide/incomplète en joueur simple alors que userIds
+  // contient plusieurs ids, c'est la RLS de "profiles" qui bloque la lecture
+  console.log('[chat] userIds demandés:', userIds.length, '· profils reçus:', (profilesData||[]).length, profErr ? ('· erreur: '+profErr.message) : '', profilesData);
   const pMap = {}; (profilesData||[]).forEach(p => pMap[p.id] = p);
 
   let html = '';
