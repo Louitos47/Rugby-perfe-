@@ -6314,8 +6314,8 @@ async function loadKineTimeline(teamId){
           <span style="font-size:10px;font-weight:800;background:${stat.color}18;color:${stat.color};border-radius:20px;padding:3px 10px;flex-shrink:0">${stat.label}</span>
         </div>
         <div style="font-size:13px;color:#1A0A0A;margin-top:3px">${grav.icon} ${escHtml(inj.type||inj.zone||'Blessure')}</div>
-        <div style="font-size:11px;color:#9A7A70;margin-top:3px">Depuis le ${fmt(inj.date_debut)}${reprise?' · '+reprise:''}</div>
-        ${inj.objectif_reprise?`<div style="font-size:11px;color:#1A8C6E;font-weight:700;margin-top:3px">🎯 ${escHtml(inj.objectif_reprise)}</div>`:''}
+        <div style="font-size:11px;color:#9A7A70;margin-top:3px">Depuis le ${fmt(inj.date_debut)}${inj.duree_estimee_jours?' · ~'+inj.duree_estimee_jours+'j':''}${reprise?' · '+reprise:''}</div>
+        ${inj.objectif_reprise?`<div style="font-size:11px;color:#1A8C6E;font-weight:700;margin-top:3px">🎯 Objectif : ${escHtml(inj.objectif_reprise)}</div>`:''}
       </div>
     </div>`;
   }).join('');
