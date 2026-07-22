@@ -225,7 +225,7 @@ input,textarea,select{outline:none;font-family:inherit}
 </div>
 
 <!-- MODAL -->
-<div class="modal-overlay" id="modal" style="display:none" onclick="if(event.target===this)closeModal()">
+<div class="modal-overlay" id="modal" style="display:none" onclick="if(event.target===this)smartCloseModal()">
   <div class="modal" id="modal-inner"></div>
 
 <script>
@@ -4397,11 +4397,7 @@ function openPrepaSessionForm(){
 }
 
 function closePrepaSessionForm(){
-  const titre = document.getElementById('ps-titre')?.value.trim();
-  const desc = document.getElementById('ps-description')?.value.trim();
-  const hasExercices = Object.keys(_prepaExercices).length > 0;
-  const hasContent = titre || desc || hasExercices || _prepaTargetSelection.length;
-  if(hasContent && !confirm('Des informations ont déjà été saisies. Fermer sans envoyer la séance ?')) return;
+  // Fermeture directe et fiable (confirm() bloquait la croix en app installée)
   closeModal();
 }
 
@@ -8459,6 +8455,8 @@ function renderPiedModal(sessionId){
     "</div>";
 
   openModal(html, sessionId);
+  // La fermeture (croix globale ou tap sur le fond) doit nettoyer une séance vide
+  _modalCloseHandler = () => closePiedModal(sessionId);
 }
 
 // Distance du tir au but jusqu'aux poteaux (terrain 68m × 100m, zone en but = 9% de la hauteur)
@@ -9209,8 +9207,28 @@ async function deleteMatch(id){ if(confirm("Supprimer ce match ?")){await delete
 function openKineForm(){ _currentType="kine"; _currentRessenti=2; openSessionForm({type:"kine"}); }
 
 // ── MODAL ─────────────────────────────────────────────────────────────────────
-function openModal(html, sid){ document.getElementById("modal-inner").innerHTML=html; if(sid) document.getElementById("modal-inner").setAttribute("data-sid",sid); document.getElementById("modal").style.display="flex"; }
-function closeModal(){ document.getElementById("modal").style.display="none"; editingItem=null; }
+// Fermeture spécifique éventuelle (ex: module jeu au pied qui nettoie une séance vide)
+let _modalCloseHandler = null;
+// Bouton de fermeture rond, toujours visible en haut à droite même sur les
+// formulaires longs (sticky) — garantit qu'on peut toujours fermer un modal
+const _MODAL_CLOSE_BTN = '<div style="position:sticky;top:-24px;height:0;z-index:20;text-align:right;pointer-events:none">' +
+  '<button onclick="smartCloseModal()" aria-label="Fermer" style="pointer-events:auto;position:relative;top:-8px;right:-2px;width:36px;height:36px;border-radius:50%;background:#F5EEE8;border:1px solid #E8D8D0;color:#1A0A0A;font-size:22px;line-height:1;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.12)">×</button></div>';
+
+function openModal(html, sid){
+  _modalCloseHandler = null;
+  const inner = document.getElementById("modal-inner");
+  inner.innerHTML = _MODAL_CLOSE_BTN + html;
+  if(sid) inner.setAttribute("data-sid", sid);
+  document.getElementById("modal").style.display = "flex";
+  inner.scrollTop = 0;
+}
+function closeModal(){ document.getElementById("modal").style.display="none"; editingItem=null; _modalCloseHandler=null; }
+// Ferme en respectant un éventuel nettoyage spécifique au modal ouvert
+function smartCloseModal(){
+  const h = _modalCloseHandler;
+  if(typeof h === 'function'){ _modalCloseHandler = null; h(); }
+  else closeModal();
+}
 
 let toastTimeout = null;
 function showToast(msg, type='success'){
