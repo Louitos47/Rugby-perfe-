@@ -1240,7 +1240,7 @@ function render(){
   if(isPureKine()){
     renderKineNav();
     const el = document.getElementById('content');
-    const kineViews = {kine_home: renderKineHome, kine_joueurs: renderKineSpace, kine_chat: renderKineChat, kine_profil: renderKineProfil};
+    const kineViews = {kine_home: renderKineHome, kine_joueurs: renderKineSpace, kine_timeline: renderKineTimeline, kine_chat: renderKineChat, kine_profil: renderKineProfil};
     if(!kineViews[currentView]) currentView = 'kine_home';
     if(el) el.innerHTML = (kineViews[currentView]||renderKineHome)();
     return;
@@ -6246,9 +6246,79 @@ function renderKineHome(){
       </div>
     </div>
   </div>
+  <button onclick="setView('kine_timeline')" style="width:100%;background:#C0185A18;border:1px solid #C0185A44;border-radius:10px;padding:12px;color:#C0185A;font-weight:800;font-size:13px;margin-bottom:10px">🕒 Frise chronologique des blessures</button>
   <div id="kine-stats-overview">Chargement des statistiques...</div>`;
   setTimeout(()=>loadKineOverviewStats(team.id), 0);
   return html;
+}
+
+// ── FRISE CHRONOLOGIQUE DES BLESSURES (tous joueurs de l'équipe) ─────────────
+let _kineTimelineFilter = 'all'; // 'all' | 'en_cours' | 'gueri'
+
+function renderKineTimeline(){
+  const kineTeams = myTeams.filter(t => t.myRole === 'kine');
+  if(!kineTeams.length) return `<div class="card" style="text-align:center;padding:30px;color:#9A7A70">Aucune équipe associée.</div>`;
+  const team = kineTeams[0];
+  const filt = (val, label) => {
+    const active = _kineTimelineFilter === val;
+    return `<button onclick="setKineTimelineFilter('${val}')" style="flex:1;padding:8px 4px;border-radius:8px;border:2px solid ${active?'#C0185A':'#E8D8D0'};background:${active?'#C0185A18':'#F5EEE8'};font-size:12px;font-weight:700;color:${active?'#C0185A':'#9A7A70'}">${label}</button>`;
+  };
+  let html = `<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px">
+    <button onclick="setView('kine_home')" style="background:#F5EEE8;border:1px solid #E8D8D0;border-radius:8px;padding:6px 12px;font-size:13px;font-weight:700;color:#1A0A0A">‹ Retour</button>
+    <div style="font-size:16px;font-weight:800">🕒 Frise des blessures</div>
+  </div>
+  <div style="display:flex;gap:6px;margin-bottom:12px">${filt('all','Toutes')}${filt('en_cours','En cours')}${filt('gueri','Guéries')}</div>
+  <div id="kine-timeline-list">Chargement...</div>`;
+  setTimeout(()=>loadKineTimeline(team.id), 0);
+  return html;
+}
+
+function setKineTimelineFilter(f){ _kineTimelineFilter = f; render(); }
+
+async function loadKineTimeline(teamId){
+  const container = document.getElementById('kine-timeline-list');
+  if(!container) return;
+  // Tous les joueurs de l'équipe + leurs blessures (accès staff médical via RLS)
+  const {data: members} = await sb.from('team_members').select('user_id').eq('team_id', teamId).eq('role', 'joueur');
+  const ids = [...new Set((members||[]).map(m => m.user_id))];
+  if(!ids.length){ container.innerHTML = '<div class="card" style="text-align:center;padding:20px;color:#9A7A70;font-size:13px">Aucun joueur dans l\'équipe.</div>'; return; }
+  const {data: profiles} = await sb.from('profiles').select('id, nom, nom_famille').in('id', ids);
+  const nameById = {}; (profiles||[]).forEach(p => nameById[p.id] = ((p.nom||'')+' '+(p.nom_famille||'')).trim() || 'Joueur');
+  const {data: injuries, error} = await sb.from('injuries').select('*').in('user_id', ids).order('date_debut', {ascending:false});
+  if(error){ container.innerHTML = '<div style="color:#C0392B;font-size:12px">Erreur de chargement.</div>'; return; }
+
+  let list = injuries || [];
+  if(_kineTimelineFilter === 'en_cours') list = list.filter(i => i.statut !== 'gueri');
+  else if(_kineTimelineFilter === 'gueri') list = list.filter(i => i.statut === 'gueri');
+
+  if(!list.length){
+    container.innerHTML = '<div class="card" style="text-align:center;padding:24px;color:#9A7A70;font-size:13px">Aucune blessure ' + (_kineTimelineFilter==='en_cours'?'en cours':_kineTimelineFilter==='gueri'?'guérie':'') + ' pour l\'instant.</div>';
+    return;
+  }
+
+  container.innerHTML = list.map((inj, i) => {
+    const grav = GRAVITE_INFO[inj.gravite] || GRAVITE_INFO.legere;
+    const stat = STATUT_INFO[inj.statut] || STATUT_INFO.en_cours;
+    const isLast = i === list.length - 1;
+    const reprise = inj.statut === 'gueri'
+      ? (inj.date_fin ? 'Reprise le ' + fmt(inj.date_fin) : 'Guéri')
+      : (inj.date_reprise_prevue ? 'Reprise prévue le ' + fmt(inj.date_reprise_prevue) : null);
+    return `<div style="display:flex;gap:12px">
+      <div style="display:flex;flex-direction:column;align-items:center">
+        <div style="width:14px;height:14px;border-radius:50%;background:${grav.color};border:2px solid #fff;box-shadow:0 0 0 2px ${grav.color}55;flex-shrink:0;margin-top:4px"></div>
+        ${isLast ? '' : '<div style="flex:1;width:2px;background:#E8D8D0;margin:2px 0"></div>'}
+      </div>
+      <div class="card" style="flex:1;margin-bottom:10px;border-color:${grav.color}33">
+        <div style="display:flex;justify-content:space-between;align-items:center;gap:8px">
+          <div style="font-size:14px;font-weight:800;color:#1A0A0A">${escHtml(nameById[inj.user_id]||'Joueur')}</div>
+          <span style="font-size:10px;font-weight:800;background:${stat.color}18;color:${stat.color};border-radius:20px;padding:3px 10px;flex-shrink:0">${stat.label}</span>
+        </div>
+        <div style="font-size:13px;color:#1A0A0A;margin-top:3px">${grav.icon} ${escHtml(inj.type||inj.zone||'Blessure')}</div>
+        <div style="font-size:11px;color:#9A7A70;margin-top:3px">Depuis le ${fmt(inj.date_debut)}${reprise?' · '+reprise:''}</div>
+        ${inj.objectif_reprise?`<div style="font-size:11px;color:#1A8C6E;font-weight:700;margin-top:3px">🎯 ${escHtml(inj.objectif_reprise)}</div>`:''}
+      </div>
+    </div>`;
+  }).join('');
 }
 
 async function loadKineOverviewStats(teamId){
