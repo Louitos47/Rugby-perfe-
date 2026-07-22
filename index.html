@@ -12,11 +12,15 @@
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent"/>
 <meta name="apple-mobile-web-app-title" content="Rugby Perf"/>
 
+<script>try{if(localStorage.getItem('rp_text_size')==='grand')document.documentElement.classList.add('text-large');}catch(e){}</script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js" defer></script>
 <style>
 *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%;background:#F5EEE8;color:#1A0A0A;font-family:-apple-system,'Inter',sans-serif;overflow:hidden}
+/* Réglage taille du texte : le zoom sur la racine agrandit tout proportionnellement
+   (comme le zoom navigateur), sans débordement horizontal. Absent = strictement identique. */
+html.text-large{zoom:1.14}
 #app{height:100%;display:flex;flex-direction:column;max-width:600px;margin:0 auto;position:relative}
 ::-webkit-scrollbar{width:3px}::-webkit-scrollbar-thumb{background:#C8A8A0;border-radius:2px}
 button{cursor:pointer;font-family:inherit;border:none;background:none}
@@ -1011,6 +1015,33 @@ function renderMainApp(){
   render();
 }
 
+// ── RÉGLAGE TAILLE DU TEXTE (Normal / Grand) ─────────────────────────────────
+function currentTextSize(){
+  try { return localStorage.getItem('rp_text_size') === 'grand' ? 'grand' : 'normal'; } catch(e){ return 'normal'; }
+}
+function applyTextSize(size){
+  document.documentElement.classList.toggle('text-large', size === 'grand');
+}
+function setTextSize(size, ctx){
+  try { localStorage.setItem('rp_text_size', size); } catch(e){}
+  applyTextSize(size);
+  // Ré-affiche pour mettre à jour l'état actif du réglage
+  if(ctx === 'modal') openProfileModal();
+  else render();
+}
+// Bloc de réglage réutilisable dans tous les menus Profil (ctx: 'modal' | 'view')
+function renderTextSizeSetting(ctx){
+  const cur = currentTextSize();
+  const opt = (val, label) => {
+    const active = cur === val;
+    return `<button onclick="setTextSize('${val}','${ctx}')" style="flex:1;padding:10px;border-radius:8px;border:2px solid ${active?'#8B1A1A':'#E8D8D0'};background:${active?'#8B1A1A18':'#F5EEE8'};font-size:13px;font-weight:700;color:${active?'#8B1A1A':'#9A7A70'}">${label}</button>`;
+  };
+  return `<div class="sec-title">🔠 Taille du texte</div>
+  <div class="card">
+    <div style="display:flex;gap:8px">${opt('normal','Normal')}${opt('grand','Grand')}</div>
+  </div>`;
+}
+
 function openProfileModal(){
   const p = userProfile || {};
   const html = `<div class="modal-title">👤 MON PROFIL</div>
@@ -1042,6 +1073,7 @@ function openProfileModal(){
     <button onclick="importTeampulse()" id="tp-import-btn" style="width:100%;background:#2E86AB;color:#fff;border:none;border-radius:8px;padding:11px;font-weight:700;font-size:13px">📥 Importer mon calendrier</button>
     <div id="tp-status" style="font-size:12px;margin-top:8px"></div>
   </div>
+  ${renderTextSizeSetting('modal')}
   <button onclick="closeModal();doLogout()" style="width:100%;margin-top:12px;background:none;border:1px solid #FF455544;border-radius:10px;padding:12px;color:#FF4655;font-weight:700;font-size:13px">🚪 Se déconnecter</button>`;
   openModal(html);
 }
@@ -3964,6 +3996,7 @@ function renderManagerProfil(){
     <button onclick="importManagerTeampulse()" id="mtp-import-btn" style="width:100%;background:#2E86AB;color:#fff;border:none;border-radius:8px;padding:11px;font-weight:700;font-size:13px">📥 Synchroniser le calendrier d'équipe</button>
     <div id="mtp-status" style="font-size:11px;margin-top:8px;text-align:center"></div>
   </div>
+  ${renderTextSizeSetting('view')}
   <button onclick="closeModal();doLogout()" style="width:100%;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:10px;padding:13px;color:#C0392B;font-weight:700;font-size:14px;margin-top:16px">Déconnexion</button>`;
   return html;
 }
@@ -4358,6 +4391,7 @@ function renderPrepaProfil(){
   </div>
   <div class="sec-title">Mon équipe</div>
   ${team ? `<div class="card"><div style="font-size:14px;font-weight:700">${team.name}</div></div>` : ''}
+  ${renderTextSizeSetting('view')}
   <button onclick="closeModal();doLogout()" style="width:100%;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:10px;padding:13px;color:#C0392B;font-weight:700;font-size:14px;margin-top:16px">Déconnexion</button>`;
 }
 
@@ -6405,6 +6439,7 @@ function renderKineProfil(){
   </div>
   <div class="sec-title">Mes équipes</div>
   ${kineTeams.map(t => `<div class="card"><div style="font-size:14px;font-weight:700">${t.name}</div></div>`).join('')}
+  ${renderTextSizeSetting('view')}
   <button onclick="closeModal();doLogout()" style="width:100%;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:10px;padding:13px;color:#C0392B;font-weight:700;font-size:14px;margin-top:16px">Déconnexion</button>`;
 }
 
