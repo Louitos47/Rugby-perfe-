@@ -2874,21 +2874,31 @@ async function deleteTeamEvent(eventId, teamId){
   refreshTeamEventsCache();
 }
 
+let _projetTab = 'projet'; // 'projet' | 'adversaire'
+
 function renderManagerProjet(){
   const team = getManagerTeam();
   if(!team) return '';
-  let html = `<button onclick="openManagerDocForm()" style="width:100%;background:#2E86AB;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:14px;margin-bottom:8px">➕ NOUVEAU DOCUMENT</button>
-  <div class="sec-title">Projet de jeu — historique</div>
-  <div id="manager-docs-list">Chargement...</div>
-  <div class="sec-title" style="margin-top:20px">⚔️ Analyse adverse</div>
-  <button onclick="openOpponentAnalysisForm(${team.id})" style="width:100%;background:#C0392B;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;font-size:13px;margin-bottom:10px">➕ NOUVELLE ANALYSE</button>
-  <div id="opponent-analysis-list">Chargement...</div>`;
-  setTimeout(()=>{
-    loadManagerDocs(team.id);
-    loadOpponentAnalysis(team.id);
-  }, 0);
+  const tabs = [{id:'projet',label:'📄 Projet de jeu'},{id:'adversaire',label:'⚔️ Analyse adverse'}];
+  let html = `<div style="display:flex;gap:6px;margin-bottom:12px">` + tabs.map(t=>{
+    const active = _projetTab===t.id;
+    return `<button onclick="switchProjetTab('${t.id}')" style="flex:1;padding:9px 4px;border-radius:10px;border:2px solid ${active?'#2E86AB':'#E8D8D0'};background:${active?'#2E86AB18':'#F5EEE8'};font-size:12px;font-weight:700;color:${active?'#2E86AB':'#9A7A70'}">${t.label}</button>`;
+  }).join('') + `</div>`;
+
+  if(_projetTab === 'projet'){
+    html += `<button onclick="openManagerDocForm()" style="width:100%;background:#2E86AB;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:14px;margin-bottom:8px">➕ NOUVEAU DOCUMENT</button>
+    <div class="sec-title">Projet de jeu — historique</div>
+    <div id="manager-docs-list">Chargement...</div>`;
+    setTimeout(()=>loadManagerDocs(team.id), 0);
+  } else {
+    html += `<button onclick="openOpponentAnalysisForm(${team.id})" style="width:100%;background:#C0392B;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;font-size:13px;margin-bottom:10px">➕ NOUVELLE ANALYSE</button>
+    <div id="opponent-analysis-list">Chargement...</div>`;
+    setTimeout(()=>loadOpponentAnalysis(team.id), 0);
+  }
   return html;
 }
+
+function switchProjetTab(tab){ _projetTab = tab; render(); }
 
 async function loadManagerDocs(teamId){
   const container = document.getElementById('manager-docs-list');
