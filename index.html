@@ -3637,6 +3637,7 @@ function renderManagerChat(){
 let chatChannels = [];        // groupes du chat de l'équipe affichée
 let activeChatChannelId = null; // null = canal général « Équipe »
 let activeDmUserId = null;    // conversation privée ouverte (user_id) ou null
+let _dmListMode = false;      // true = liste des conversations privées affichée (façon WhatsApp)
 let _pendingDmUserId = null;  // DM à ouvrir dès que le chat est prêt (navigation inter-onglets)
 let _chatTeamId = null;       // équipe dont le chat est ouvert
 let _teamMembersCache = {};   // {user_id: {name, role}} pour afficher les noms
@@ -3654,6 +3655,7 @@ async function initChatView(teamId){
   _chatTeamId = teamId;
   activeChatChannelId = null;
   activeDmUserId = null;
+  _dmListMode = false;
   await loadChatChannels(teamId);
   if(_pendingDmUserId){
     const uid = _pendingDmUserId; _pendingDmUserId = null;
@@ -3708,7 +3710,10 @@ async function startDm(userId){
   closeModal();
   activeDmUserId = userId;
   activeChatChannelId = null;
+  _dmListMode = false;
+  markSeen('dm_' + userId); // marque la conversation comme lue
   if(!_teamMembersCache[userId]) await loadTeamMembers(_chatTeamId);
+  enableChatInput(true);
   paintChatChannelBar();
   const container = document.getElementById('chat-messages');
   if(container) container.innerHTML = 'Chargement...';
@@ -3747,12 +3752,12 @@ function paintChatChannelBar(){
   const chip = (active, label, onclick) =>
     `<button onclick="${onclick}" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:1.5px solid ${active?'#2E86AB':'#E8D8D0'};background:${active?'#2E86AB18':'#FFFFFF'};color:${active?'#2E86AB':'#9A7A70'};font-size:12px;font-weight:700;cursor:pointer">${label}</button>`;
   let html = `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px;align-items:center">`;
-  html += chip(activeChatChannelId===null && !activeDmUserId, '💬 Équipe', 'switchChatChannel(null)');
+  html += chip(activeChatChannelId===null && !activeDmUserId && !_dmListMode, '💬 Équipe', 'switchChatChannel(null)');
   chatChannels.forEach(c => {
     html += chip(activeChatChannelId===c.id, escHtml(c.name), `switchChatChannel(${c.id})`);
   });
   const dmName = activeDmUserId && _teamMembersCache[activeDmUserId] ? ' · '+escHtml(_teamMembersCache[activeDmUserId].name.split(' ')[0]) : '';
-  html += chip(!!activeDmUserId, '✉️ Privé'+dmName, 'openDmPicker()');
+  html += chip(!!activeDmUserId || _dmListMode, '✉️ Privé'+dmName, 'openDmList()');
   if(canManageChannels(_chatTeamId)){
     html += `<button onclick="openCreateChannelModal()" style="flex-shrink:0;padding:6px 12px;border-radius:20px;border:1.5px dashed #1A8C6E66;background:none;color:#1A8C6E;font-size:12px;font-weight:700;cursor:pointer">+ Groupe</button>`;
   }
@@ -3778,10 +3783,91 @@ function paintChatChannelBar(){
 function switchChatChannel(id){
   activeChatChannelId = id;
   activeDmUserId = null;
+  _dmListMode = false;
+  enableChatInput(true);
   paintChatChannelBar();
   const container = document.getElementById('chat-messages');
   if(container) container.innerHTML = 'Chargement...';
   loadChatMessages(_chatTeamId);
+}
+
+// Active/désactive la barre d'envoi (désactivée sur la liste des conversations)
+function enableChatInput(on){
+  const inp = document.getElementById('chat-input');
+  if(!inp) return;
+  inp.disabled = !on;
+  inp.placeholder = on ? 'Votre message...' : 'Choisis une conversation';
+  inp.style.opacity = on ? '1' : '0.5';
+}
+
+// Liste des conversations privées (façon WhatsApp), dans la zone des messages
+async function openDmList(){
+  activeDmUserId = null;
+  activeChatChannelId = null;
+  _dmListMode = true;
+  paintChatChannelBar();
+  enableChatInput(false);
+  const container = document.getElementById('chat-messages');
+  if(container) container.innerHTML = '<div style="text-align:center;color:#9A7A70;font-size:12px;padding:16px">Chargement...</div>';
+  loadDmConversations();
+}
+
+function dmListTime(iso){
+  const dateStr = iso.split('T')[0];
+  if(dateStr === today()){
+    try { return new Date(iso).toLocaleTimeString('fr-FR', {hour:'2-digit', minute:'2-digit'}); } catch(e){ return ''; }
+  }
+  return fmt(dateStr);
+}
+
+async function loadDmConversations(){
+  const container = document.getElementById('chat-messages');
+  if(!container) return;
+  const me = currentUser.id;
+  const teamId = _chatTeamId;
+  // Une seule requête : tous mes messages privés de l'équipe, du plus récent au plus ancien
+  const {data} = await sb.from('direct_messages').select('*')
+    .eq('team_id', teamId)
+    .or(`sender_id.eq.${me},recipient_id.eq.${me}`)
+    .order('created_at', {ascending:false}).limit(500);
+  const rows = data || [];
+  // Regroupement par interlocuteur : 1er vu = dernier message (tri desc conservé)
+  const convs = {};
+  rows.forEach(m => {
+    const other = m.sender_id === me ? m.recipient_id : m.sender_id;
+    if(!other) return;
+    if(!convs[other]) convs[other] = {otherId: other, last: m, unread: 0};
+    if(m.sender_id === other && new Date(m.created_at) > new Date(lastSeen('dm_'+other))) convs[other].unread++;
+  });
+  const list = Object.values(convs);
+
+  let html = `<button onclick="openDmPicker()" style="width:100%;background:#2E86AB;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;font-size:13px;margin-bottom:10px">✏️ Nouveau message</button>`;
+  if(!list.length){
+    container.innerHTML = html + `<div style="text-align:center;color:#9A7A70;font-size:13px;padding:24px">Aucune conversation — écris à un membre de l'équipe.</div>`;
+    return;
+  }
+  // Profils (nom + avatar) en une requête
+  const {data: profs} = await sb.from('profiles').select('id, nom, nom_famille, avatar_url').in('id', list.map(c=>c.otherId));
+  const pMap = {}; (profs||[]).forEach(p => pMap[p.id] = p);
+
+  html += list.map(c => {
+    const p = pMap[c.otherId];
+    const name = p ? ((p.nom||'')+' '+(p.nom_famille||'')).trim() || 'Membre' : (_teamMembersCache[c.otherId]?.name || 'Membre');
+    const isMine = c.last.sender_id === me;
+    const preview = (isMine ? 'Moi : ' : '') + c.last.message;
+    return `<div onclick="startDm('${c.otherId}')" style="display:flex;align-items:center;gap:10px;padding:10px 4px;border-bottom:1px solid #F5EEE8;cursor:pointer">
+      ${chatAvatarHtml(p, c.otherId, name)}
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;justify-content:space-between;gap:8px;align-items:baseline">
+          <span style="font-size:13px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(name)}</span>
+          <span style="font-size:10px;color:#9A7A70;flex-shrink:0">${dmListTime(c.last.created_at)}</span>
+        </div>
+        <div style="font-size:12px;color:#9A7A70;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escHtml(preview)}</div>
+      </div>
+      ${c.unread ? `<span style="background:#FF3B30;color:#fff;border-radius:20px;min-width:18px;height:18px;display:inline-flex;align-items:center;justify-content:center;font-size:10px;font-weight:800;padding:0 5px;flex-shrink:0">${c.unread>99?'99+':c.unread}</span>` : ''}
+    </div>`;
+  }).join('');
+  container.innerHTML = html;
 }
 
 function openCreateChannelModal(){
@@ -3946,6 +4032,7 @@ async function loadChatMessages(teamId){
 }
 
 async function sendChatMessage(){
+  if(_dmListMode && !activeDmUserId) return; // liste des conversations : rien à envoyer
   const teamId = _chatTeamId || (getManagerTeam() || myTeams[0])?.id;
   if(!teamId) return;
   const input = document.getElementById('chat-input');
