@@ -652,7 +652,7 @@ async function loadAllData(){
     } catch(e) { matchReports = []; }
     // Compteurs de non-lus (pastilles rouges de la navigation)
     try { await refreshUnreadCounts(); } catch(e){}
-    sessions = (s.data || []).map(r => ({...r.data, id: r.id, date: r.date, type: r.type, heure: r.heure, duree: r.duree, ressenti: r.ressenti, difficulte: r.difficulte, notes: r.notes}));
+    sessions = (s.data || []).map(r => ({...r.data, id: r.id, date: r.date, type: r.type, heure: r.heure, duree: r.duree, ressenti: r.ressenti, difficulte: r.difficulte, notes: r.notes, pied_stats: r.pied_stats, terrain_sub: r.data?.terrain_sub}));
     matches = m.data || [];
     chargesLog = (c.data || []).map(r => ({...r, sets: r.sets || []}));
     
@@ -8510,11 +8510,16 @@ async function closePiedModal(sessionId){
 }
 
 function openPiedModule(sessionId){
-  _piedShots = [];
+  // Rouvre une séance existante avec ses tirs sauvegardés, ou démarre à vide
+  const s = sessions.find(x => x.id == sessionId);
+  _piedShots = (s?.pied_stats?.shots || []).map(x => ({...x}));
   _piedMode = 'but';
   _piedCurrentShot = null;
-  _piedContext = 'entrainement';
+  _piedContext = s?.pied_stats?.contexte || 'entrainement';
   renderPiedModal(sessionId);
+  // Première ouverture : on affiche bien le haut du module
+  const sc = document.getElementById('pied-scroll');
+  if(sc) sc.scrollTop = 0;
 }
 
 function setPiedContext(ctx, sessionId){
@@ -8538,11 +8543,11 @@ function renderPiedModal(sessionId){
   // Terrain SVG vue du ciel (demi-terrain)
   const terrainSVG = renderPiedTerrain();
 
-  const html = "<div style=\"max-height:90vh;overflow-y:auto\">" +
+  const html = "<div id=\"pied-scroll\" style=\"max-height:90vh;overflow-y:auto\">" +
     // Header
     "<div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:12px\">" +
     "<div style=\"font-size:15px;font-weight:800\">🦵 Jeu au pied</div>" +
-    "<span onclick=\"closePiedModal(" + sid + ")\" style=\"font-size:22px;color:#9A7A70;cursor:pointer\">×</span></div>" +
+    "<button onclick=\"closePiedModal(" + sid + ")\" style=\"font-size:24px;color:#9A7A70;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:50%;width:38px;height:38px;line-height:1;cursor:pointer\">×</button></div>" +
     // Contexte : entraînement ou match
     "<div style=\"display:flex;gap:6px;margin-bottom:10px\">" +
     "<button onclick=\"setPiedContext('entrainement'," + sid + ")\" style=\"flex:1;padding:7px 4px;border-radius:8px;border:2px solid " + (_piedContext==='entrainement'?'#2E86AB':'#E8D8D0') + ";background:" + (_piedContext==='entrainement'?'#2E86AB18':'#F5EEE8') + ";font-size:11px;font-weight:700;color:" + (_piedContext==='entrainement'?'#2E86AB':'#9A7A70') + "\">🏋️ Entraînement</button>" +
@@ -8597,7 +8602,11 @@ function renderPiedModal(sessionId){
     "<button onclick=\"savePiedSession(" + sid + ")\" style=\"width:100%;background:#27AE60;color:#fff;border:none;border-radius:10px;padding:12px;font-weight:800;font-size:13px;margin-top:12px\">✅ VALIDER LA SÉANCE</button>" +
     "</div>";
 
+  // Conserver la position de scroll entre deux re-rendus (validation d'un tir, etc.)
+  const prevScroll = document.getElementById('pied-scroll')?.scrollTop || 0;
   openModal(html, sessionId);
+  const sc = document.getElementById('pied-scroll');
+  if(sc) sc.scrollTop = prevScroll;
   // La fermeture (croix globale ou tap sur le fond) doit nettoyer une séance vide
   _modalCloseHandler = () => closePiedModal(sessionId);
 }
@@ -9408,8 +9417,8 @@ function openKineForm(){ _currentType="kine"; _currentRessenti=2; openSessionFor
 let _modalCloseHandler = null;
 // Bouton de fermeture rond, toujours visible en haut à droite même sur les
 // formulaires longs (sticky) — garantit qu'on peut toujours fermer un modal
-const _MODAL_CLOSE_BTN = '<div style="position:sticky;top:-24px;height:0;z-index:20;text-align:right;pointer-events:none">' +
-  '<button onclick="smartCloseModal()" aria-label="Fermer" style="pointer-events:auto;position:relative;top:-8px;right:-2px;width:36px;height:36px;border-radius:50%;background:#F5EEE8;border:1px solid #E8D8D0;color:#1A0A0A;font-size:22px;line-height:1;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.12)">×</button></div>';
+const _MODAL_CLOSE_BTN = '<div style="position:sticky;top:0;height:0;z-index:20;text-align:right;pointer-events:none">' +
+  '<button onclick="smartCloseModal()" aria-label="Fermer" style="pointer-events:auto;position:relative;top:2px;right:0;width:40px;height:40px;border-radius:50%;background:#F5EEE8;border:1px solid #E8D8D0;color:#1A0A0A;font-size:24px;line-height:1;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.12)">×</button></div>';
 
 function openModal(html, sid){
   _modalCloseHandler = null;
