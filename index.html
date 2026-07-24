@@ -9008,6 +9008,60 @@ async function savePiedSession(sessionId){
   closeModal();
   showToast('Séance jeu au pied sauvegardée ✅', 'success');
   render();
+  // Écran récapitulatif valorisant de la performance
+  showPiedRecap(stats);
+}
+
+// Récap visuel de la séance jeu au pied qui vient d'être enregistrée
+function showPiedRecap(stats){
+  const totalEchecs = (stats.echecs_droite||0) + (stats.echecs_gauche||0) + (stats.echecs_court||0);
+  const butColor = (stats.buts_pct>=80) ? '#27AE60' : (stats.buts_pct>=50) ? '#E67E22' : '#C0392B';
+  let html = `<div class="modal-title" style="text-align:center">🦵 TA SÉANCE JEU AU PIED</div>`;
+
+  // Buts — gros pourcentage
+  if(stats.buts_total){
+    html += `<div class="card" style="text-align:center;border-color:#27AE6033;background:#27AE600C">
+      <div style="font-size:11px;font-weight:800;color:#27AE60;letter-spacing:1px">🎯 RÉUSSITE AUX BUTS</div>
+      <div style="font-size:44px;font-weight:900;color:${butColor};line-height:1.1;margin:4px 0">${stats.buts_pct}%</div>
+      <div style="font-size:13px;color:#9A7A70">${stats.buts_reussis}/${stats.buts_total} buts réussis</div>
+    </div>`;
+    if(totalEchecs){
+      html += `<div class="card">
+        <div style="font-size:11px;font-weight:800;color:#9A7A70;margin-bottom:8px">RÉPARTITION DES ÉCHECS</div>
+        ${[
+          {label:'→ Droite', val:stats.echecs_droite, color:'#C0392B'},
+          {label:'← Gauche', val:stats.echecs_gauche, color:'#E67E22'},
+          {label:'↓ Court', val:stats.echecs_court, color:'#9A7A70'}
+        ].filter(e=>e.val>0).map(e=>`<div style="margin-bottom:8px">
+          <div style="display:flex;justify-content:space-between;font-size:12px;margin-bottom:3px"><span>${e.label}</span><span style="font-weight:800;color:${e.color}">${e.val}</span></div>
+          <div style="background:#E8D8D0;border-radius:6px;height:6px"><div style="background:${e.color};border-radius:6px;height:6px;width:${Math.round(e.val/totalEchecs*100)}%"></div></div>
+        </div>`).join('')}
+      </div>`;
+    }
+  }
+
+  // Box kicks + sorties
+  const cards = [];
+  if(stats.boxkicks_total){
+    cards.push(`<div style="flex:1;background:#2E86AB10;border:1px solid #2E86AB33;border-radius:12px;padding:14px;text-align:center">
+      <div style="font-size:28px;font-weight:900;color:#2E86AB">${stats.boxkicks_total}</div>
+      <div style="font-size:11px;color:#9A7A70;margin-top:2px">Box kicks · ${stats.boxkicks_dist_moy}m moy.</div>
+    </div>`);
+  }
+  if(stats.sorties_total){
+    cards.push(`<div style="flex:1;background:#D4841A10;border:1px solid #D4841A33;border-radius:12px;padding:14px;text-align:center">
+      <div style="font-size:28px;font-weight:900;color:#D4841A">${stats.sorties_total}</div>
+      <div style="font-size:11px;color:#9A7A70;margin-top:2px">Sorties · ${stats.sorties_direct} directes</div>
+    </div>`);
+  }
+  if(cards.length) html += `<div style="display:flex;gap:10px">${cards.join('')}</div>`;
+
+  if(!stats.buts_total && !stats.boxkicks_total && !stats.sorties_total){
+    html += `<div class="card" style="text-align:center;color:#9A7A70;font-size:13px;padding:20px">Séance enregistrée ✅</div>`;
+  }
+
+  html += `<button onclick="closeModal()" style="width:100%;background:#27AE60;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:14px;margin-top:14px">OK</button>`;
+  openModal(html);
 }
 
 function cloturerSeance(sessionId){
