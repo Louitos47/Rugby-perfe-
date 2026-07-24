@@ -7040,6 +7040,9 @@ function calPrev(){ const [y,m]=calMonth.split('-').map(Number); const d=new Dat
 function calNext(){ const [y,m]=calMonth.split('-').map(Number); const d=new Date(y,m,1); calMonth=d.toISOString().slice(0,7); render(); }
 
 // ── STATS ─────────────────────────────────────────────────────────────────────
+let _piedStatFilter = 'tout'; // 'tout' | 'entrainement' | 'match' — filtre du bloc jeu au pied
+function setPiedStatFilter(f){ _piedStatFilter = f; render(); }
+
 function renderMoi(){
   const p = userProfile || {};
   const totalMin = sessions.reduce((a,s) => a+(s.duree||0), 0);
@@ -7182,83 +7185,72 @@ function renderMoi(){
 
   // ── JEU AU PIED ──
   if(totalButs > 0 || totalBK > 0 || piedSessions.length > 0){
-    const butPct = totalButs ? Math.round(totalButsR/totalButs*100) : 0;
-    const totalSorties = piedSessions.reduce((a,s)=>a+(s.pied_stats?.sorties_total||0),0);
-    const totalSortiesDirect = piedSessions.reduce((a,s)=>a+(s.pied_stats?.sorties_direct||0),0);
-    const echecsD = piedSessions.reduce((a,s)=>a+(s.pied_stats?.echecs_droite||0),0);
-    const echecsG = piedSessions.reduce((a,s)=>a+(s.pied_stats?.echecs_gauche||0),0);
-    const echecsC = piedSessions.reduce((a,s)=>a+(s.pied_stats?.echecs_court||0),0);
-    const totalEchecs = echecsD + echecsG + echecsC;
+    // Filtre Tout / Entraînement / Match — recalcule toutes les stats du bloc
+    const fpied = _piedStatFilter === 'tout'
+      ? piedSessions
+      : piedSessions.filter(s => (s.pied_stats?.contexte||'entrainement') === _piedStatFilter);
+    const sum = key => fpied.reduce((a,s)=>a+(s.pied_stats?.[key]||0),0);
+    const fButs = sum('buts_total'), fButsR = sum('buts_reussis'), fBK = sum('boxkicks_total');
+    const fAvgDistBK = fBK ? Math.round(fpied.reduce((a,s)=>a+(s.pied_stats?.boxkicks_dist_moy||0)*(s.pied_stats?.boxkicks_total||0),0)/fBK) : 0;
+    const fSorties = sum('sorties_total'), fSortiesDirect = sum('sorties_direct');
+    const fEchecsD = sum('echecs_droite'), fEchecsG = sum('echecs_gauche'), fEchecsC = sum('echecs_court');
+    const fTotalEchecs = fEchecsD + fEchecsG + fEchecsC;
+    const fButPct = fButs ? Math.round(fButsR/fButs*100) : 0;
+
+    const fbtn = (val, label) => {
+      const active = _piedStatFilter === val;
+      return `<button onclick="setPiedStatFilter('${val}')" style="flex:1;padding:7px 4px;border-radius:8px;border:2px solid ${active?'#8B1A1A':'#E8D8D0'};background:${active?'#8B1A1A18':'#F5EEE8'};font-size:11px;font-weight:700;color:${active?'#8B1A1A':'#9A7A70'}">${label}</button>`;
+    };
 
     html += `<div class="card" style="margin-top:10px">
-      <div style="font-size:12px;font-weight:800;color:#9A7A70;margin-bottom:10px">🦵 JEU AU PIED</div>
+      <div style="font-size:12px;font-weight:800;color:#9A7A70;margin-bottom:8px">🦵 JEU AU PIED</div>
+      <div style="display:flex;gap:6px;margin-bottom:12px">${fbtn('tout','Tout')}${fbtn('entrainement','🏋️ Entraînement')}${fbtn('match','⚔️ Match')}</div>`;
 
+    if(!fpied.length){
+      html += `<div style="text-align:center;color:#9A7A70;font-size:13px;padding:16px">Aucune séance ${_piedStatFilter==='match'?'de match':'d\'entraînement'} enregistrée.</div></div>`;
+    } else {
+      html += `
       <!-- 4 chiffres clés -->
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
-        ${totalButs ? `<div style="background:#27AE6010;border:1px solid #27AE6033;border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:22px;font-weight:900;color:#27AE60">${butPct}%</div>
-          <div style="font-size:10px;color:#9A7A70">Buts (${totalButsR}/${totalButs})</div>
+        ${fButs ? `<div style="background:#27AE6010;border:1px solid #27AE6033;border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:22px;font-weight:900;color:#27AE60">${fButPct}%</div>
+          <div style="font-size:10px;color:#9A7A70">Buts (${fButsR}/${fButs})</div>
         </div>` : ''}
-        ${totalBK ? `<div style="background:#2E86AB10;border:1px solid #2E86AB33;border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:22px;font-weight:900;color:#2E86AB">${avgDistBK}m</div>
-          <div style="font-size:10px;color:#9A7A70">Box kick moy. (${totalBK})</div>
+        ${fBK ? `<div style="background:#2E86AB10;border:1px solid #2E86AB33;border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:22px;font-weight:900;color:#2E86AB">${fAvgDistBK}m</div>
+          <div style="font-size:10px;color:#9A7A70">Box kick moy. (${fBK})</div>
         </div>` : ''}
-        ${totalSorties ? `<div style="background:#D4841A10;border:1px solid #D4841A33;border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:22px;font-weight:900;color:#D4841A">${totalSorties}</div>
-          <div style="font-size:10px;color:#9A7A70">Sorties (${totalSortiesDirect} directes)</div>
+        ${fSorties ? `<div style="background:#D4841A10;border:1px solid #D4841A33;border-radius:10px;padding:10px;text-align:center">
+          <div style="font-size:22px;font-weight:900;color:#D4841A">${fSorties}</div>
+          <div style="font-size:10px;color:#9A7A70">Sorties (${fSortiesDirect} directes)</div>
         </div>` : ''}
         <div style="background:#8B1A1A10;border:1px solid #8B1A1A33;border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:22px;font-weight:900;color:#8B1A1A">${piedSessions.length}</div>
+          <div style="font-size:22px;font-weight:900;color:#8B1A1A">${fpied.length}</div>
           <div style="font-size:10px;color:#9A7A70">Séances</div>
         </div>
       </div>
 
-      <!-- Répartition entraînement / match -->
-      ${(() => {
-        const entS = piedSessions.filter(s => (s.pied_stats?.contexte||'entrainement') === 'entrainement');
-        const matS = piedSessions.filter(s => s.pied_stats?.contexte === 'match');
-        if(!matS.length) return '';
-        const agg = list => {
-          const t = list.reduce((a,s)=>a+(s.pied_stats?.buts_total||0),0);
-          const r = list.reduce((a,s)=>a+(s.pied_stats?.buts_reussis||0),0);
-          return {t, r, pct: t?Math.round(r/t*100):null};
-        };
-        const e = agg(entS), m = agg(matS);
-        const cell = (icon, label, color, d) => `<div style="background:${color}10;border:1px solid ${color}33;border-radius:10px;padding:10px;text-align:center">
-          <div style="font-size:10px;color:#9A7A70;margin-bottom:2px">${icon} ${label}</div>
-          <div style="font-size:18px;font-weight:900;color:${color}">${d.t?d.r+'/'+d.t:'—'}</div>
-          ${d.pct!==null?`<div style="font-size:10px;font-weight:700;color:${color}">${d.pct}% réussite</div>`:''}
-        </div>`;
-        return `<div style="margin-bottom:12px">
-          <div style="font-size:11px;font-weight:700;color:#9A7A70;margin-bottom:8px">BUTS : ENTRAÎNEMENT VS MATCH</div>
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
-            ${cell('🏋️','Entraînement','#2E86AB',e)}
-            ${cell('⚔️','Match','#C0392B',m)}
-          </div>
-        </div>`;
-      })()}
-
       <!-- Analyse échecs -->
-      ${totalEchecs > 0 ? `<div style="margin-bottom:12px">
+      ${fTotalEchecs > 0 ? `<div style="margin-bottom:12px">
         <div style="font-size:11px;font-weight:700;color:#9A7A70;margin-bottom:8px">ANALYSE DES ÉCHECS</div>
         ${[
-          {label:'→ Droite', val:echecsD, color:'#C0392B'},
-          {label:'← Gauche', val:echecsG, color:'#E67E22'},
-          {label:'↓ Court', val:echecsC, color:'#9A7A70'},
+          {label:'→ Droite', val:fEchecsD, color:'#C0392B'},
+          {label:'← Gauche', val:fEchecsG, color:'#E67E22'},
+          {label:'↓ Court', val:fEchecsC, color:'#9A7A70'},
         ].filter(e=>e.val>0).map(e => `<div style="margin-bottom:8px">
           <div style="display:flex;justify-content:space-between;margin-bottom:3px;font-size:12px">
             <span>${e.label}</span><span style="font-weight:800;color:${e.color}">${e.val}</span>
           </div>
           <div style="background:#E8D8D0;border-radius:6px;height:5px">
-            <div style="background:${e.color};border-radius:6px;height:5px;width:${Math.round(e.val/totalEchecs*100)}%"></div>
+            <div style="background:${e.color};border-radius:6px;height:5px;width:${Math.round(e.val/fTotalEchecs*100)}%"></div>
           </div>
         </div>`).join('')}
       </div>` : ''}
 
-      <!-- Dernières séances -->
-      ${piedSessions.length > 0 ? `<div>
+      <!-- Dernières séances (du filtre) -->
+      <div>
         <div style="font-size:11px;font-weight:700;color:#9A7A70;margin-bottom:8px">DERNIÈRES SÉANCES</div>
-        ${piedSessions.slice(-3).reverse().map(s => {
+        ${fpied.slice(-3).reverse().map(s => {
           const ps = s.pied_stats;
           const pct = ps.buts_total ? Math.round(ps.buts_reussis/ps.buts_total*100) : null;
           const color = pct >= 80 ? '#27AE60' : pct >= 50 ? '#E67E22' : '#C0392B';
@@ -7271,8 +7263,9 @@ function renderMoi(){
             ${pct !== null ? `<span style="font-size:10px;font-weight:700;padding:2px 8px;border-radius:20px;background:${color}18;color:${color}">${ps.buts_reussis}/${ps.buts_total}</span>` : ''}
           </div>`;
         }).join('')}
-      </div>` : ''}
+      </div>
     </div>`;
+    }
   }
 
   return html;
