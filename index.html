@@ -223,6 +223,7 @@ input,textarea,select{outline:none;font-family:inherit}
     </div>
     <div class="chrono-btns">
       <button class="chrono-btn reset" onclick="chronoReset()" style="font-size:16px;font-weight:700" title="Arrêter et fermer">×</button>
+      <button class="chrono-btn reset" onclick="chronoZeroReset()" style="font-size:16px;font-weight:700" title="Remettre à zéro">↺</button>
       <button class="chrono-btn start" id="chrono-toggle" onclick="chronoToggle()">▶ START</button>
     </div>
   </div>
@@ -7620,7 +7621,7 @@ function openSessionForm(initial=null){
   renderSessionForm();
 }
 
-function renderSessionForm(){
+function renderSessionForm(preserveScroll){
   const t=_currentType;
   const s=editingItem||{};
   // Mode Jeu au pied — formulaire minimal puis terrain interactif
@@ -7745,7 +7746,7 @@ function renderSessionForm(){
     <button class="btn-save" onclick="submitSession()" style="background:${SESSION_TYPES[t]?.color||C.accent};color:#000">${editingItem?.id?'MODIFIER':'AJOUTER'}</button>
     <button class="btn-cancel" onclick="closeModal()">Annuler</button>
   </div>`;
-  openModal(html);
+  openModal(html, null, preserveScroll);
 }
 
 function loadPosteSeance(seanceKey){
@@ -7767,6 +7768,9 @@ function loadPosteSeance(seanceKey){
 
 // ── BIBLIOTHÈQUE D'EXERCICES ─────────────────────────────────────────────────
 let _libFilter = {search: '', groupe: '', equipement: '', categorie: ''};
+// Mémorise la position de défilement du formulaire de séance avant d'ouvrir la
+// bibliothèque d'exercices, pour la restaurer au retour (ajout d'un exercice).
+let _sessionFormScroll = 0;
 
 const GROUPES = ['Jambes', 'Torse', 'Dos', 'Épaules', 'Bras', 'Gainage', 'Mobilité'];
 const EQUIPEMENTS = ['Barre', 'Haltères', 'Machine', 'Poulie', 'Lest', 'Aucun'];
@@ -7834,6 +7838,7 @@ function addPrepaExerciceFromLib(nom){
 
 function openExerciseLibraryModal(){
   _libFilter = {search: '', groupe: '', equipement: '', categorie: ''};
+  _sessionFormScroll = document.getElementById('modal-inner')?.scrollTop || 0;
   renderExerciseLibraryModal();
 }
 
@@ -7861,7 +7866,7 @@ function renderExerciseLibraryModal(){
   const html = "<div style=\"position:relative\">" +
     "<div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:12px\">" +
     "<div style=\"font-size:15px;font-weight:800\">🔍 Choisir un exercice</div>" +
-    "<span onclick=\"renderSessionForm()\" style=\"font-size:22px;color:#9A7A70;cursor:pointer;padding:4px 8px\">×</span>" +
+    "<span onclick=\"returnToSessionForm()\" style=\"font-size:22px;color:#9A7A70;cursor:pointer;padding:4px 8px\">×</span>" +
     "</div>" +
     // Barre de recherche
     "<input class=\"input\" id=\"lib-search\" placeholder=\"Rechercher un exercice...\" value=\"" + _libFilter.search + "\" style=\"margin-bottom:10px\" oninput=\"updateLibSearch(this.value)\"/>" +
@@ -7922,7 +7927,15 @@ function addExFromLibrary(nom){
   // Rouvrir le formulaire de séance avec le nouvel exercice.
   // Surtout ne PAS appeler closeModal() ici : il remettrait editingItem à null
   // et une séance en cours de modification serait dupliquée au lieu d'être mise à jour.
-  renderSessionForm();
+  returnToSessionForm();
+}
+
+// Retour au formulaire de séance depuis la bibliothèque, en restaurant la
+// position de défilement d'avant l'ouverture de la bibliothèque.
+function returnToSessionForm(){
+  const inner = document.getElementById('modal-inner');
+  if(inner) inner.scrollTop = _sessionFormScroll;
+  renderSessionForm(true);
 }
 
 // ── CRÉATION D'EXERCICE DEPUIS LE SÉLECTEUR (séance joueur ou planif prépa) ──
@@ -8145,7 +8158,7 @@ function renderBlocButtons(exLabel){
 
 function addBloc(){
   sessionBlocs.push({name: 'Bloc ' + (sessionBlocs.length + 1), exercises: []});
-  renderSessionForm();
+  renderSessionForm(true);
 }
 
 function removeBloc(blocIdx){
@@ -8153,7 +8166,7 @@ function removeBloc(blocIdx){
   sessionBlocs.splice(blocIdx, 1);
   // Renuméroter les blocs
   sessionBlocs.forEach((b, i) => { if(b.name.startsWith('Bloc ')) b.name = 'Bloc ' + (i+1); });
-  renderSessionForm();
+  renderSessionForm(true);
 }
 
 function moveToBloc(exLabel, blocIdx){
@@ -8161,13 +8174,13 @@ function moveToBloc(exLabel, blocIdx){
   // Retirer de tout autre bloc
   sessionBlocs.forEach(b => { b.exercises = b.exercises.filter(e => e !== exLabel); });
   sessionBlocs[blocIdx].exercises.push(exLabel);
-  renderSessionForm();
+  renderSessionForm(true);
 }
 
 function removeFromBloc(exLabel, blocIdx){
   if(!sessionBlocs[blocIdx]) return;
   sessionBlocs[blocIdx].exercises = sessionBlocs[blocIdx].exercises.filter(e => e !== exLabel);
-  renderSessionForm();
+  renderSessionForm(true);
 }
 
 // Liste des séances muscu passées, pour repartir d'une séance existante
@@ -8315,13 +8328,13 @@ function addExToSession(val){
   if(sessionSets[val] !== undefined) return; // déjà ajouté
   sessionSets[val] = [{kg:'',reps:''}];
   _currentType = 'muscu';
-  renderSessionForm();
+  renderSessionForm(true);
 }
 
 function removeExFromSession(val){
   delete sessionSets[val];
   _currentType = 'muscu';
-  renderSessionForm();
+  renderSessionForm(true);
 }
 
 // ── SÉRIES MUSCU : rendu unifié (formulaire séance + blocs) ──────────────────
@@ -8332,13 +8345,13 @@ let _collapsedBlocs = new Set();
 function toggleExCollapse(exLabel){
   if(_collapsedEx.has(exLabel)) _collapsedEx.delete(exLabel);
   else _collapsedEx.add(exLabel);
-  renderSessionForm();
+  renderSessionForm(true);
 }
 
 function toggleBlocCollapse(idx){
   if(_collapsedBlocs.has(idx)) _collapsedBlocs.delete(idx);
   else _collapsedBlocs.add(idx);
-  renderSessionForm();
+  renderSessionForm(true);
 }
 
 // Bouton flèche de repli (▼ ouvert / ▶ replié)
@@ -8387,7 +8400,7 @@ function exMode(exLabel){
 function setExMode(exLabel, field, on){
   // Applique le mode à toutes les séries de l'exercice
   (sessionSets[exLabel]||[]).forEach(s => { s[field] = on; if(field==='isPdc' && on) s.kg=''; });
-  renderSessionForm();
+  renderSessionForm(true);
 }
 
 function updateExTempo(exLabel, val){
@@ -8476,14 +8489,14 @@ function addSet(exLabel){
   }
   const m = exMode(exLabel);
   sessionSets[exLabel].push({kg:'',reps:'',isPdc:m.isPdc,isTimed:m.isTimed});
-  renderSessionForm();
+  renderSessionForm(true);
 }
 
 function removeSet(exLabel, idx){
   if(!sessionSets[exLabel]) return;
   sessionSets[exLabel].splice(idx, 1);
   if(sessionSets[exLabel].length === 0) sessionSets[exLabel] = [{kg:'',reps:''}];
-  renderSessionForm();
+  renderSessionForm(true);
 }
 
 function updateSet(exLabel, idx, field, val){
@@ -9287,7 +9300,7 @@ function saveFormFieldsAndRender(){
       if(timedEl) saved['timed_'+i] = timedEl.checked;
     }
   }
-  renderSessionForm();
+  renderSessionForm(true);
   // Réinjecter toutes les valeurs après le re-rendu
   setTimeout(()=>{
     fields.forEach(id => {
@@ -9507,13 +9520,16 @@ let _modalCloseHandler = null;
 const _MODAL_CLOSE_BTN = '<div style="position:sticky;top:0;height:0;z-index:20;text-align:right;pointer-events:none">' +
   '<button onclick="smartCloseModal()" aria-label="Fermer" style="pointer-events:auto;position:relative;top:2px;right:0;width:40px;height:40px;border-radius:50%;background:#F5EEE8;border:1px solid #E8D8D0;color:#1A0A0A;font-size:24px;line-height:1;cursor:pointer;box-shadow:0 2px 6px rgba(0,0,0,0.12)">×</button></div>';
 
-function openModal(html, sid){
+function openModal(html, sid, preserveScroll){
   _modalCloseHandler = null;
   const inner = document.getElementById("modal-inner");
+  // preserveScroll : garder la position de défilement lors d'un re-render du même
+  // contenu (ex : ajout/suppression d'un exercice ou bloc dans la séance muscu)
+  const prevScroll = preserveScroll ? inner.scrollTop : 0;
   inner.innerHTML = _MODAL_CLOSE_BTN + html;
   if(sid) inner.setAttribute("data-sid", sid);
   document.getElementById("modal").style.display = "flex";
-  inner.scrollTop = 0;
+  inner.scrollTop = prevScroll;
 }
 function closeModal(){ document.getElementById("modal").style.display="none"; editingItem=null; _modalCloseHandler=null; }
 // Ferme en respectant un éventuel nettoyage spécifique au modal ouvert
@@ -9616,6 +9632,23 @@ function chronoReset(){
   document.getElementById('chrono-bar').classList.add('hidden');
   const header = document.querySelector('.header');
   if(header) header.style.marginTop = '0';
+}
+
+// Remet le compteur à 00:00:00 SANS fermer la barre chrono.
+// S'il tournait, il repart de zéro et continue ; s'il était en pause, il reste à 00:00:00 en pause.
+function chronoZeroReset(){
+  chronoSeconds = 0;
+  if(chronoRunning){
+    // On garde l'intervalle en cours : on redémarre juste le point de départ à maintenant
+    chronoStartTime = Date.now();
+    try { localStorage.setItem('rp_chrono_start', chronoStartTime); localStorage.setItem('rp_chrono_seconds', 0); } catch(e){}
+  } else {
+    try { localStorage.setItem('rp_chrono_seconds', 0); localStorage.removeItem('rp_chrono_start'); } catch(e){}
+  }
+  const el = document.getElementById('chrono-display');
+  if(el) el.textContent = chronoFormat(0);
+  const dashEl = document.getElementById('dash-chrono');
+  if(dashEl) dashEl.textContent = chronoFormat(0);
 }
 
 function chronoShow(){
