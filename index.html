@@ -7787,14 +7787,31 @@ function openPrepaExerciseModal(){
   renderPrepaExerciseModal();
 }
 
-function renderPrepaExerciseModal(){
+// Liste filtrée — côté préparateur
+function libPrepaFiltered(){
   const allEx = getAllExercises();
-  let filtered = allEx.filter(e => {
+  return allEx.filter(e => {
     if(_libFilter.search && !e.label.toLowerCase().includes(_libFilter.search.toLowerCase())) return false;
     if(_libFilter.groupe && exGroupe(e) !== _libFilter.groupe) return false;
     if(_libFilter.categorie && e.categorie !== _libFilter.categorie) return false;
     return true;
   });
+}
+
+// Contenu de la liste de résultats seule — côté préparateur
+function libPrepaResultsHtml(filtered){
+  return (filtered.length === 0 ? "<div style=\"text-align:center;padding:20px;color:#9A7A70\">Aucun exercice trouvé.<br><br><button onclick=\"openCreateExerciseFromPicker('prepa')\" style=\"background:#D4841A;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700\">➕ Créer « " + (_libFilter.search||'cet exercice').replace(/"/g,'&quot;') + " »</button></div>" : "") +
+    filtered.map(e =>
+      "<div onclick=\"addPrepaExerciceFromLib('" + e.label.replace(/'/g,"&apos;") + "')\" style=\"display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid #F5EEE8;cursor:pointer\">" +
+      "<div style=\"width:36px;height:36px;border-radius:50%;background:#D4841A18;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0\">" + (e.icon||'💪') + "</div>" +
+      "<div><div style=\"font-size:13px;font-weight:700\">" + e.label + (e.is_rugby?" 🏉":"") + "</div>" +
+      "<div style=\"font-size:11px;color:#9A7A70\">" + exGroupe(e) + "</div></div>" +
+      "</div>"
+    ).join('');
+}
+
+function renderPrepaExerciseModal(){
+  const filtered = libPrepaFiltered();
 
   const html = "<div>" +
     "<div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:12px\">" +
@@ -7809,25 +7826,26 @@ function renderPrepaExerciseModal(){
     ).join('') +
     "</div>" +
     "<div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:8px\">" +
-    "<div style=\"font-size:11px;color:#9A7A70\">" + filtered.length + " exercice(s)</div>" +
+    "<div id=\"lib-count\" style=\"font-size:11px;color:#9A7A70\">" + filtered.length + " exercice(s)</div>" +
     "<button onclick=\"openCreateExerciseFromPicker('prepa')\" style=\"background:#D4841A;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700\">➕ Créer un exercice</button>" +
     "</div>" +
-    "<div style=\"max-height:45vh;overflow-y:auto\">" +
-    (filtered.length === 0 ? "<div style=\"text-align:center;padding:20px;color:#9A7A70\">Aucun exercice trouvé.<br><br><button onclick=\"openCreateExerciseFromPicker('prepa')\" style=\"background:#D4841A;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700\">➕ Créer « " + (_libFilter.search||'cet exercice').replace(/"/g,'&quot;') + " »</button></div>" : "") +
-    filtered.map(e =>
-      "<div onclick=\"addPrepaExerciceFromLib('" + e.label.replace(/'/g,"&apos;") + "')\" style=\"display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid #F5EEE8;cursor:pointer\">" +
-      "<div style=\"width:36px;height:36px;border-radius:50%;background:#D4841A18;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0\">" + (e.icon||'💪') + "</div>" +
-      "<div><div style=\"font-size:13px;font-weight:700\">" + e.label + (e.is_rugby?" 🏉":"") + "</div>" +
-      "<div style=\"font-size:11px;color:#9A7A70\">" + exGroupe(e) + "</div></div>" +
-      "</div>"
-    ).join('') +
+    "<div id=\"lib-results\" style=\"max-height:45vh;overflow-y:auto\">" +
+    libPrepaResultsHtml(filtered) +
     "</div></div>";
 
   openModal(html);
   setTimeout(()=>{ const inp = document.getElementById('lib-search'); if(inp) inp.focus(); }, 100);
 }
 
-function updatePrepaLibSearch(val){ _libFilter.search = val; renderPrepaExerciseModal(); }
+// Ne redessine que la liste des résultats → focus + clavier iOS conservés.
+function updatePrepaLibSearch(val){
+  _libFilter.search = val;
+  const filtered = libPrepaFiltered();
+  const res = document.getElementById('lib-results');
+  if(res) res.innerHTML = libPrepaResultsHtml(filtered);
+  const cnt = document.getElementById('lib-count');
+  if(cnt) cnt.textContent = filtered.length + " exercice(s)";
+}
 function setPrepaLibFilter(key, val){ _libFilter[key] = val; renderPrepaExerciseModal(); }
 
 function addPrepaExerciceFromLib(nom){
@@ -7842,8 +7860,21 @@ function openExerciseLibraryModal(){
   renderExerciseLibraryModal();
 }
 
-function renderExerciseLibraryModal(){
-  // Fusionner bibliothèque globale + exercices custom
+// Fréquence d'utilisation de chaque exercice dans l'historique des séances muscu
+// du joueur (clé = libellé de l'exercice = exLabel). Sert à remonter en tête de
+// bibliothèque les exercices les plus utilisés.
+function getExerciseUsageCounts(){
+  const counts = {};
+  sessions.filter(s => s.type === 'muscu').forEach(s => {
+    (s.muscuSets || []).forEach(ms => {
+      if(ms.exLabel) counts[ms.exLabel] = (counts[ms.exLabel] || 0) + 1;
+    });
+  });
+  return counts;
+}
+
+// Liste filtrée (+ triée par fréquence quand la recherche est vide) — joueur
+function libPlayerFiltered(){
   const allEx = [
     ...exercisesLibrary,
     ...customExercises.map(e => ({
@@ -7853,8 +7884,6 @@ function renderExerciseLibraryModal(){
       icon: e.icon || '💪', is_rugby: false, _isCustom: true
     }))
   ];
-
-  // Filtrer
   let filtered = allEx.filter(e => {
     if(_libFilter.search && !e.nom.toLowerCase().includes(_libFilter.search.toLowerCase())) return false;
     if(_libFilter.groupe && e.groupe_musculaire !== _libFilter.groupe) return false;
@@ -7862,6 +7891,33 @@ function renderExerciseLibraryModal(){
     if(_libFilter.categorie && e.categorie !== _libFilter.categorie) return false;
     return true;
   });
+  // Recherche vide → les plus utilisés d'abord (tri stable : sans historique,
+  // toutes les fréquences sont à 0 et l'ordre d'origine est conservé).
+  if(!_libFilter.search){
+    const counts = getExerciseUsageCounts();
+    filtered.sort((a,b) => (counts[b.nom]||0) - (counts[a.nom]||0));
+  }
+  return filtered;
+}
+
+// Contenu de la liste de résultats seule (rangée par rangée) — joueur
+function libPlayerResultsHtml(filtered){
+  if(filtered.length === 0){
+    return "<div style=\"text-align:center;padding:20px;color:#9A7A70\">Aucun exercice trouvé.<br><br><button onclick=\"openCreateExerciseFromPicker('session')\" style=\"background:#8B1A1A;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700\">➕ Créer « " + (_libFilter.search||'cet exercice').replace(/"/g,'&quot;') + " »</button></div>";
+  }
+  return filtered.map(e =>
+    "<div onclick=\"addExFromLibrary('" + e.nom.replace(/'/g,"&apos;") + "')\" style=\"display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid #F5EEE8;cursor:pointer\">" +
+    "<div style=\"width:36px;height:36px;border-radius:50%;background:#8B1A1A18;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0\">" + e.icon + "</div>" +
+    "<div style=\"flex:1\">" +
+    "<div style=\"font-size:13px;font-weight:700\">" + e.nom + (e.is_rugby ? " 🏉" : "") + "</div>" +
+    "<div style=\"font-size:11px;color:#9A7A70\">" + e.groupe_musculaire + (e.equipement !== 'Aucun' ? " · " + e.equipement : "") + "</div>" +
+    "</div>" +
+    "</div>"
+  ).join('');
+}
+
+function renderExerciseLibraryModal(){
+  const filtered = libPlayerFiltered();
 
   const html = "<div style=\"position:relative\">" +
     "<div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:12px\">" +
@@ -7886,22 +7942,11 @@ function renderExerciseLibraryModal(){
     "</div>" +
     // Résultats
     "<div style=\"display:flex;justify-content:space-between;align-items:center;margin-bottom:8px\">" +
-    "<div style=\"font-size:11px;color:#9A7A70\">" + filtered.length + " exercice(s)</div>" +
+    "<div id=\"lib-count\" style=\"font-size:11px;color:#9A7A70\">" + filtered.length + " exercice(s)</div>" +
     "<button onclick=\"openCreateExerciseFromPicker('session')\" style=\"background:#8B1A1A;color:#fff;border:none;border-radius:8px;padding:6px 12px;font-size:11px;font-weight:700\">➕ Créer un exercice</button>" +
     "</div>" +
-    "<div style=\"max-height:45vh;overflow-y:auto\">" +
-    (filtered.length === 0
-      ? "<div style=\"text-align:center;padding:20px;color:#9A7A70\">Aucun exercice trouvé.<br><br><button onclick=\"openCreateExerciseFromPicker('session')\" style=\"background:#8B1A1A;color:#fff;border:none;border-radius:10px;padding:10px 18px;font-size:13px;font-weight:700\">➕ Créer « " + (_libFilter.search||'cet exercice').replace(/"/g,'&quot;') + " »</button></div>"
-      : filtered.map(e =>
-          "<div onclick=\"addExFromLibrary('" + e.nom.replace(/'/g,"&apos;") + "')\" style=\"display:flex;align-items:center;gap:12px;padding:10px 4px;border-bottom:1px solid #F5EEE8;cursor:pointer\">" +
-          "<div style=\"width:36px;height:36px;border-radius:50%;background:#8B1A1A18;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0\">" + e.icon + "</div>" +
-          "<div style=\"flex:1\">" +
-          "<div style=\"font-size:13px;font-weight:700\">" + e.nom + (e.is_rugby ? " 🏉" : "") + "</div>" +
-          "<div style=\"font-size:11px;color:#9A7A70\">" + e.groupe_musculaire + (e.equipement !== 'Aucun' ? " · " + e.equipement : "") + "</div>" +
-          "</div>" +
-          "</div>"
-        ).join('')
-    ) +
+    "<div id=\"lib-results\" style=\"max-height:45vh;overflow-y:auto\">" +
+    libPlayerResultsHtml(filtered) +
     "</div>" +
     "</div>";
 
@@ -7912,9 +7957,15 @@ function renderExerciseLibraryModal(){
   }, 100);
 }
 
+// Recherche : ne redessine QUE la liste des résultats (pas le champ input),
+// pour garder le focus et le clavier iOS ouverts pendant la saisie.
 function updateLibSearch(val){
   _libFilter.search = val;
-  renderExerciseLibraryModal();
+  const filtered = libPlayerFiltered();
+  const res = document.getElementById('lib-results');
+  if(res) res.innerHTML = libPlayerResultsHtml(filtered);
+  const cnt = document.getElementById('lib-count');
+  if(cnt) cnt.textContent = filtered.length + " exercice(s)";
 }
 
 function setLibFilter(key, val){
