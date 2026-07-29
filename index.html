@@ -1335,6 +1335,7 @@ function render(){
     const el = document.getElementById('content');
     const kineViews = {kine_home: renderKineHome, kine_joueurs: renderKineSpace, kine_timeline: renderKineTimeline, kine_chat: renderKineChat, kine_profil: renderKineProfil};
     if(!kineViews[currentView]) currentView = 'kine_home';
+    setContentChatLayout(currentView === 'kine_chat');
     if(el) el.innerHTML = (kineViews[currentView]||renderKineHome)();
     return;
   }
@@ -1343,6 +1344,7 @@ function render(){
     const el = document.getElementById('content');
     const prepaViews = {prepa_home: renderPrepaHome, prepa_seances: renderPrepaSeances, prepa_exercices: renderPrepaExercices, prepa_tests: renderPrepaTests, prepa_chat: renderPrepaChat, prepa_profil: renderPrepaProfil};
     if(!prepaViews[currentView]) currentView = 'prepa_home';
+    setContentChatLayout(currentView === 'prepa_chat');
     if(el) el.innerHTML = (prepaViews[currentView]||renderPrepaHome)();
     return;
   }
@@ -1351,6 +1353,7 @@ function render(){
     const el = document.getElementById('content');
     const managerViews = {manager_home: renderManagerHome, manager_projet: renderManagerProjet, manager_debrief: renderManagerDebrief, manager_rapports: renderCoachReports, manager_stats: renderManagerStats, manager_chat: renderManagerChat, manager_profil: renderManagerProfil};
     if(!managerViews[currentView]) currentView = 'manager_home';
+    setContentChatLayout(currentView === 'manager_chat');
     if(el) el.innerHTML = (managerViews[currentView]||renderManagerHome)();
     return;
   }
@@ -1361,6 +1364,7 @@ function render(){
     const el = document.getElementById('content');
     const managerViews = {manager_home: renderManagerHome, manager_projet: renderManagerProjet, manager_debrief: renderManagerDebrief, manager_rapports: renderCoachReports, manager_stats: renderManagerStats, manager_chat: renderManagerChat, manager_profil: renderManagerProfil};
     if(!managerViews[currentView]) currentView = 'manager_home';
+    setContentChatLayout(currentView === 'manager_chat');
     if(el) el.innerHTML = (managerViews[currentView]||renderManagerHome)();
     return;
   }
@@ -1368,9 +1372,9 @@ function render(){
   renderPhaseBadge();
   const views={dashboard:renderDashboard,agenda:renderAgenda,moi:renderMoi,programme:renderProgramme,planning:renderPlanning,charges:renderCharges,kine:renderKine,calendar:renderCalendar,stats:renderStats,forme:renderForme,athlete:renderAthlete,equipe:renderEquipe,chat_joueur:renderChatJoueur};
   const el = document.getElementById('content');
-  // Réinitialise le mode "chat plein écran" avant chaque rendu (réactivé par
-  // renderEquipe uniquement sur l'onglet Chat)
-  setContentChatLayout(false);
+  // Mode "chat plein écran" : actif pour le chat joueur autonome ; pour l'onglet
+  // Équipe c'est renderEquipe qui le (ré)active selon son sous-onglet Chat.
+  setContentChatLayout(currentView === 'chat_joueur');
   if(el) el.innerHTML = (views[currentView]||renderDashboard)();
 }
 
@@ -3682,13 +3686,14 @@ let chatPollingInterval = null;
 function renderManagerChat(){
   const team = getManagerTeam();
   if(!team) return '';
-  let html = '<div id="chat-channels-bar"></div>' +
-    '<div id="chat-messages" style="min-height:200px;max-height:60vh;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
-    '<div style="display:flex;gap:8px;position:sticky;bottom:0;background:var(--bg,#F5EEE8);padding:4px 0">' +
+  let html = '<div id="chat-channels-bar" style="flex-shrink:0"></div>' +
+    '<div id="chat-messages" style="flex:1 1 auto;min-height:0;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
+    '<div style="display:flex;gap:8px;flex-shrink:0">' +
     '<input class="input" id="chat-input" placeholder="Votre message..." style="flex:1"/>' +
     '<button onclick="sendChatMessage()" style="background:#2E86AB;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700">➤</button>' +
     '</div>';
   setTimeout(()=>{
+    setContentChatLayout(true);
     initChatView(team.id);
     setTimeout(()=>{
       const inp = document.getElementById('chat-input');
@@ -3819,7 +3824,7 @@ function paintChatChannelBar(){
   if(!bar) return;
   const chip = (active, label, onclick) =>
     `<button onclick="${onclick}" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:1.5px solid ${active?'#2E86AB':'#E8D8D0'};background:${active?'#2E86AB18':'#FFFFFF'};color:${active?'#2E86AB':'#9A7A70'};font-size:12px;font-weight:700;cursor:pointer">${label}</button>`;
-  let html = `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px;align-items:center">`;
+  let html = `<div style="display:flex;flex-wrap:wrap;gap:6px;padding-bottom:2px;margin-bottom:8px;align-items:center">`;
   html += chip(activeChatChannelId===null && !activeDmUserId && !_dmListMode && !_annoncesMode, '💬 Équipe', 'switchChatChannel(null)');
   chatChannels.forEach(c => {
     html += chip(activeChatChannelId===c.id, escHtml(c.name), `switchChatChannel(${c.id})`);
@@ -4561,13 +4566,14 @@ function renderPrepaChat(){
   let html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
     '<span style="font-size:20px">💬</span>' +
     '<div style="font-size:15px;font-weight:800">Chat — ' + team.name + '</div></div>' +
-    '<div id="chat-channels-bar"></div>' +
-    '<div id="chat-messages" style="min-height:300px;max-height:55vh;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
-    '<div style="display:flex;gap:8px">' +
+    '<div id="chat-channels-bar" style="flex-shrink:0"></div>' +
+    '<div id="chat-messages" style="flex:1 1 auto;min-height:0;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
+    '<div style="display:flex;gap:8px;flex-shrink:0">' +
     '<input class="input" id="chat-input" placeholder="Votre message..." style="flex:1"/>' +
     '<button onclick="sendChatMessage()" style="background:#8B1A1A;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700">➤</button>' +
     '</div>';
   setTimeout(()=>{
+    setContentChatLayout(true);
     initChatView(team.id);
     setTimeout(()=>{
       const inp = document.getElementById('chat-input');
@@ -5621,13 +5627,14 @@ function renderChatJoueur(){
   let html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
     '<span style="font-size:20px">💬</span>' +
     '<div style="font-size:15px;font-weight:800">Chat — ' + team.name + '</div></div>' +
-    '<div id="chat-channels-bar"></div>' +
-    '<div id="chat-messages" style="min-height:300px;max-height:55vh;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
-    '<div style="display:flex;gap:8px">' +
+    '<div id="chat-channels-bar" style="flex-shrink:0"></div>' +
+    '<div id="chat-messages" style="flex:1 1 auto;min-height:0;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
+    '<div style="display:flex;gap:8px;flex-shrink:0">' +
     '<input class="input" id="chat-input" placeholder="Votre message..." style="flex:1"/>' +
     '<button onclick="sendChatMessage()" style="background:#2E86AB;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700">➤</button>' +
     '</div>';
   setTimeout(()=>{
+    setContentChatLayout(true);
     initChatView(team.id);
     setTimeout(()=>{
       const inp = document.getElementById('chat-input');
@@ -6205,13 +6212,14 @@ function renderKineChat(){
   let html = '<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">' +
     '<span style="font-size:20px">💬</span>' +
     '<div style="font-size:15px;font-weight:800">Chat — ' + escHtml(team.name) + '</div></div>' +
-    '<div id="chat-channels-bar"></div>' +
-    '<div id="chat-messages" style="min-height:300px;max-height:55vh;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
-    '<div style="display:flex;gap:8px">' +
+    '<div id="chat-channels-bar" style="flex-shrink:0"></div>' +
+    '<div id="chat-messages" style="flex:1 1 auto;min-height:0;overflow-y:auto;margin-bottom:10px">Chargement...</div>' +
+    '<div style="display:flex;gap:8px;flex-shrink:0">' +
     '<input class="input" id="chat-input" placeholder="Votre message..." style="flex:1"/>' +
     '<button onclick="sendChatMessage()" style="background:#C0185A;color:#fff;border:none;border-radius:10px;padding:10px 16px;font-weight:700">➤</button>' +
     '</div>';
   setTimeout(()=>{
+    setContentChatLayout(true);
     initChatView(team.id);
     setTimeout(()=>{
       const inp = document.getElementById('chat-input');
