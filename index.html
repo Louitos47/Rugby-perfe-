@@ -3703,6 +3703,7 @@ let chatChannels = [];        // groupes du chat de l'équipe affichée
 let activeChatChannelId = null; // null = canal général « Équipe »
 let activeDmUserId = null;    // conversation privée ouverte (user_id) ou null
 let _dmListMode = false;      // true = liste des conversations privées affichée (façon WhatsApp)
+let _annoncesMode = false;    // true = sous-onglet « 📣 Annonces » affiché
 let _pendingDmUserId = null;  // DM à ouvrir dès que le chat est prêt (navigation inter-onglets)
 let _chatTeamId = null;       // équipe dont le chat est ouvert
 let _teamMembersCache = {};   // {user_id: {name, role}} pour afficher les noms
@@ -3721,6 +3722,7 @@ async function initChatView(teamId){
   activeChatChannelId = null;
   activeDmUserId = null;
   _dmListMode = false;
+  _annoncesMode = false;
   await loadChatChannels(teamId);
   if(_pendingDmUserId){
     const uid = _pendingDmUserId; _pendingDmUserId = null;
@@ -3776,6 +3778,7 @@ async function startDm(userId){
   activeDmUserId = userId;
   activeChatChannelId = null;
   _dmListMode = false;
+  _annoncesMode = false;
   markSeen('dm_' + userId); // marque la conversation comme lue
   if(!_teamMembersCache[userId]) await loadTeamMembers(_chatTeamId);
   enableChatInput(true);
@@ -3817,12 +3820,13 @@ function paintChatChannelBar(){
   const chip = (active, label, onclick) =>
     `<button onclick="${onclick}" style="flex-shrink:0;padding:6px 14px;border-radius:20px;border:1.5px solid ${active?'#2E86AB':'#E8D8D0'};background:${active?'#2E86AB18':'#FFFFFF'};color:${active?'#2E86AB':'#9A7A70'};font-size:12px;font-weight:700;cursor:pointer">${label}</button>`;
   let html = `<div style="display:flex;gap:6px;overflow-x:auto;padding-bottom:6px;margin-bottom:8px;align-items:center">`;
-  html += chip(activeChatChannelId===null && !activeDmUserId && !_dmListMode, '💬 Équipe', 'switchChatChannel(null)');
+  html += chip(activeChatChannelId===null && !activeDmUserId && !_dmListMode && !_annoncesMode, '💬 Équipe', 'switchChatChannel(null)');
   chatChannels.forEach(c => {
     html += chip(activeChatChannelId===c.id, escHtml(c.name), `switchChatChannel(${c.id})`);
   });
   const dmName = activeDmUserId && _teamMembersCache[activeDmUserId] ? ' · '+escHtml(_teamMembersCache[activeDmUserId].name.split(' ')[0]) : '';
   html += chip(!!activeDmUserId || _dmListMode, '✉️ Privé'+dmName, 'openDmList()');
+  html += chip(_annoncesMode, '📣 Annonces', 'openAnnoncesTab()');
   if(canManageChannels(_chatTeamId)){
     html += `<button onclick="openCreateChannelModal()" style="flex-shrink:0;padding:6px 12px;border-radius:20px;border:1.5px dashed #1A8C6E66;background:none;color:#1A8C6E;font-size:12px;font-weight:700;cursor:pointer">+ Groupe</button>`;
   }
@@ -3849,11 +3853,40 @@ function switchChatChannel(id){
   activeChatChannelId = id;
   activeDmUserId = null;
   _dmListMode = false;
+  _annoncesMode = false;
   enableChatInput(true);
   paintChatChannelBar();
   const container = document.getElementById('chat-messages');
   if(container) container.innerHTML = 'Chargement...';
   loadChatMessages(_chatTeamId);
+}
+
+// Sous-onglet « 📣 Annonces » : visible par tous, publiable par le staff seul.
+function openAnnoncesTab(){
+  _annoncesMode = true;
+  activeChatChannelId = null;
+  activeDmUserId = null;
+  _dmListMode = false;
+  paintChatChannelBar();
+  enableChatInput(false);
+  renderAnnoncesTab();
+}
+
+function renderAnnoncesTab(){
+  const container = document.getElementById('chat-messages');
+  if(!container) return;
+  const isStaff = canManageChannels(_chatTeamId); // manager / entraîneur
+  let html = `<div style="font-size:11px;color:#9A7A70;margin-bottom:10px">📣 Annonces importantes visibles par toute l'équipe.</div>`;
+  if(isStaff){
+    html += `<div class="card">
+      <div style="font-size:13px;font-weight:800;margin-bottom:8px">Nouvelle annonce</div>
+      <textarea class="input" id="announcement-text" rows="2" placeholder="Ex: RDV 10h au club dimanche, tenue de match obligatoire"></textarea>
+      <button onclick="publishAnnouncement()" style="width:100%;background:#2E86AB;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;font-size:13px;margin-top:8px">📣 Publier l'annonce</button>
+    </div>`;
+  }
+  html += `<div id="announcements-list" style="margin-top:4px">Chargement...</div>`;
+  container.innerHTML = html;
+  loadAnnouncements(_chatTeamId);
 }
 
 // Active/désactive la barre d'envoi (désactivée sur la liste des conversations)
@@ -3870,6 +3903,7 @@ async function openDmList(){
   activeDmUserId = null;
   activeChatChannelId = null;
   _dmListMode = true;
+  _annoncesMode = false;
   paintChatChannelBar();
   enableChatInput(false);
   const container = document.getElementById('chat-messages');
@@ -4097,6 +4131,7 @@ async function loadChatMessages(teamId){
 }
 
 async function sendChatMessage(){
+  if(_annoncesMode) return; // onglet Annonces : pas d'envoi de message ici
   if(_dmListMode && !activeDmUserId) return; // liste des conversations : rien à envoyer
   const teamId = _chatTeamId || (getManagerTeam() || myTeams[0])?.id;
   if(!teamId) return;
