@@ -2664,20 +2664,16 @@ function getManagerTeam(){
 function renderManagerHome(){
   const team = getManagerTeam();
   if(!team) return `<div class="card" style="text-align:center;padding:30px;color:#9A7A70">Aucune équipe associée.</div>`;
-  let html = `<div class="card">
-    <div style="display:flex;align-items:center;gap:12px">
-      <div style="width:44px;height:44px;border-radius:50%;background:#2E86AB18;border:2px solid #2E86AB44;display:flex;align-items:center;justify-content:center;font-size:20px">📋</div>
-      <div>
-        <div style="font-size:16px;font-weight:800">Espace Manager</div>
-        <div style="font-size:12px;color:#9A7A70">${team.name}</div>
-      </div>
-    </div>
+  // 1. Bandeau de contexte — compact et discret (simple titre)
+  let html = `<div style="display:flex;align-items:center;gap:8px;padding:4px 2px;margin-bottom:10px">
+    <span style="font-size:15px">📋</span>
+    <div style="font-size:12px;color:#9A7A70;font-weight:600">Espace Manager · <span style="color:#1A0A0A;font-weight:800">${team.name}</span></div>
   </div>
-  <div style="display:flex;gap:8px;margin-bottom:4px">
-    <button onclick="openManagerEventForm('match')" style="flex:1;background:#C0392B;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;font-size:13px">⚔️ Créer un match</button>
-    <button onclick="openManagerEventForm('entrainement')" style="flex:1;background:#2E86AB;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;font-size:13px">🏉 Créer un entraînement</button>
+  <div style="display:flex;gap:6px;margin-bottom:4px">
+    <button onclick="openManagerEventForm('match')" style="flex:1;background:#C0392B;color:#fff;border:none;border-radius:9px;padding:8px 6px;font-weight:800;font-size:12px">⚔️ Match</button>
+    <button onclick="openManagerEventForm('entrainement')" style="flex:1;background:#2E86AB;color:#fff;border:none;border-radius:9px;padding:8px 6px;font-weight:800;font-size:12px">🏉 Entraînement</button>
+    <button onclick="openManagerEventForm('autre')" style="flex:1;background:#7B2D8B;color:#fff;border:none;border-radius:9px;padding:8px 6px;font-weight:800;font-size:12px">📌 Autre</button>
   </div>
-  <button onclick="openManagerEventForm('autre')" style="width:100%;background:#7B2D8B;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;font-size:13px;margin-bottom:4px">📌 Créer un autre événement</button>
   <div id="manager-overview">Chargement...</div>`;
   setTimeout(()=>loadManagerOverview(team.id), 0);
   return html;
@@ -2824,9 +2820,12 @@ async function loadManagerOverview(teamId){
 
   let html = '';
 
-  // ── 1. À VENIR (section la plus visible) ─────────────────────────────────
+  // ── 1. À VENIR (section la plus visible — le plus de poids visuel) ────────
   const {data: upcomingEvents} = await sb.from('team_events').select('*').eq('team_id', teamId).gte('date', today()).order('date', {ascending:true}).limit(5);
-  html += `<div style="font-size:13px;font-weight:800;color:#1A0A0A;letter-spacing:1px;margin:4px 0 10px">📅 À VENIR</div>`;
+  html += `<div style="display:flex;align-items:center;gap:8px;margin:2px 0 12px">
+    <div style="font-size:17px;font-weight:900;color:#1A0A0A;letter-spacing:.5px">📅 À venir</div>
+    <div style="flex:1;height:2px;background:linear-gradient(90deg,#2E86AB44,transparent);border-radius:2px"></div>
+  </div>`;
   if(upcomingEvents?.length){
     // Réponses de présence pour ces événements (une seule requête)
     const upIds = upcomingEvents.map(e => e.id);
@@ -2856,29 +2855,31 @@ async function loadManagerOverview(teamId){
       </div>`;
     });
   } else {
-    html += `<div class="card" style="text-align:center;padding:18px;color:#9A7A70;font-size:13px">Aucun événement à venir — crée un match, un entraînement ou un autre événement ci-dessus.</div>`;
+    html += `<div class="card" style="text-align:center;padding:18px;color:#9A7A70;font-size:13px">Aucun événement à venir — crée-en un ci-dessus.</div>`;
   }
 
-  // ── 2. Compteurs effectif / non aptes (compacts) ─────────────────────────
-  html += `<div class="stat-row" style="margin-top:6px">
-    <div class="stat-box"><div class="stat-val" style="color:#2E86AB">${totalPlayers}</div><div class="stat-lbl">Effectif</div></div>
-    <div class="stat-box"><div class="stat-val" style="color:${nonAptCount>0?'#C0392B':'#1A8C6E'}">${nonAptCount}</div><div class="stat-lbl">Non aptes</div></div>
+  // ── 2. Compteurs effectif / non aptes (ligne compacte, secondaire) ───────
+  html += `<div style="display:flex;gap:18px;align-items:center;margin:18px 0 8px;padding:9px 14px;background:#F5EEE8;border-radius:10px;font-size:12px;color:#9A7A70">
+    <span><b style="color:#2E86AB;font-size:15px">${totalPlayers}</b> effectif</span>
+    <span style="width:1px;height:14px;background:#E0D0C8"></span>
+    <span><b style="color:${nonAptCount>0?'#C0392B':'#1A8C6E'};font-size:15px">${nonAptCount}</b> non apte${nonAptCount>1?'s':''}</span>
   </div>`;
 
-  // ── 3. Joueurs ───────────────────────────────────────────────────────────
-  html += `<div class="sec-title">Joueurs</div>`;
-  playerList.forEach(p => {
+  // ── 3. Joueurs (secondaire, discret : un seul bloc, lignes compactes) ────
+  html += `<div class="sec-title" style="color:#9A7A70;letter-spacing:1px;margin-bottom:8px">Joueurs</div>`;
+  html += `<div class="card" style="padding:4px 12px">`;
+  playerList.forEach((p, i) => {
     const isApte = aptStatusByPlayer[p.id] !== false;
     const injList = mgrInjuriesByPlayer[p.id] || [];
-    html += `<div class="card" style="display:flex;justify-content:space-between;align-items:center;border-color:${isApte?'#E8D8D0':'#C0392B44'}">
-      <div>
-        <div style="font-size:14px;font-weight:700">${p.nom||''} ${p.nom_famille||''}</div>
-        <div style="font-size:11px;color:#9A7A70">${p.poste||'Poste non renseigné'}</div>
-        ${injList.length ? `<div style="font-size:11px;color:#C0392B;margin-top:2px">🩹 ${injList.map(escHtml).join(' · ')}</div>` : ''}
+    html += `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;padding:8px 0${i < playerList.length-1 ? ';border-bottom:1px solid #F5EEE8' : ''}">
+      <div style="min-width:0">
+        <div style="font-size:13px;font-weight:600;color:#1A0A0A">${p.nom||''} ${p.nom_famille||''} <span style="font-size:11px;color:#9A7A70;font-weight:400">· ${p.poste||'Poste non renseigné'}</span></div>
+        ${injList.length ? `<div style="font-size:11px;color:#C0392B;margin-top:1px">🩹 ${injList.map(escHtml).join(' · ')}</div>` : ''}
       </div>
-      <span style="font-size:10px;font-weight:800;border-radius:20px;padding:3px 10px;background:${isApte?'#1A8C6E18':'#C0392B18'};color:${isApte?'#1A8C6E':'#C0392B'}">${isApte?'✓ Apte':'⚠️ Non apte'}</span>
+      <span style="flex-shrink:0;font-size:10px;font-weight:800;border-radius:20px;padding:3px 9px;background:${isApte?'#1A8C6E18':'#C0392B18'};color:${isApte?'#1A8C6E':'#C0392B'}">${isApte?'✓ Apte':'⚠️ Non apte'}</span>
     </div>`;
   });
+  html += `</div>`;
 
   // ── 4. Matchs à débriefer (secondaire, atténué) — matchs passés sans stats ─
   const {data: pastMatches} = await sb.from('team_events').select('*').eq('team_id', teamId).eq('type', 'match').lt('date', today()).order('date', {ascending:false}).limit(5);
