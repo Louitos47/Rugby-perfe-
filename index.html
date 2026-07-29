@@ -7809,7 +7809,9 @@ function renderSessionForm(preserveScroll){
           </button>`).join('')}
         </div>
       </div>` : '';
-    extra = renderZoneSelector() + renderEchauffementSection() + posteBtn + renderMuscuForm(bycat, selected);
+    // Ordre : (1) PROGRAMME + reprendre une séance, (2) Échauffement encadré,
+    // (3) Corps de séance encadré. La zone (orientation) reste en tête, avec le point de départ.
+    extra = posteBtn + renderPastMuscuPicker() + renderZoneSelector() + renderEchauffementSection() + renderMuscuForm(bycat, selected);
   }
   else if(t==='course') extra=`<div class="field"><label>Format de course</label>
     <select class="input" id="f_course_format">
@@ -8487,8 +8489,10 @@ function removeEchauffement(cat, idx){
 }
 
 function renderMuscuForm(bycat, selected){
-  let html = `<div class="field">
-    ${renderPastMuscuPicker()}
+  // Corps de séance encadré (même cadre orange que l'échauffement) pour séparer
+  // visuellement l'échauffement et le travail principal.
+  let html = `<div style="background:#FFF6ED;border:2px solid #F0C89A;border-radius:14px;padding:14px;margin-bottom:14px">
+    <div style="font-size:14px;font-weight:800;color:#D4841A;margin-bottom:10px">💪 Corps de séance</div>
     <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:6px">
       <label style="margin-bottom:0">Ajouter un exercice</label>
       <button onclick="chronoShow()" style="background:#1A0A0A;color:#C8302A;border:1px solid #3A2020;border-radius:8px;padding:6px 12px;font-size:12px;font-weight:800">⏱️ Chrono</button>
