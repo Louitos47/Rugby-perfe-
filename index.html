@@ -3056,47 +3056,41 @@ function renderManagerDebrief(){
   const team = getManagerTeam();
   if(!team) return '';
   const {start, end} = getWeekRange();
+  // Onglet Débrief = analyse & bilan uniquement (les annonces sont retirées d'ici,
+  // elles seront rebranchées dans le Chat — publishAnnouncement/loadAnnouncements restent définies).
   let html = `
-    <div class="card" style="border-color:#1A8C6E44;background:#1A8C6E08;cursor:pointer" onclick="setView('manager_rapports')">
+    <div class="card" style="border-color:#1A8C6E44;background:#1A8C6E08;cursor:pointer;margin-bottom:22px" onclick="setView('manager_rapports')">
       <div style="display:flex;align-items:center;gap:12px">
         <span style="font-size:24px">📊</span>
         <div style="flex:1">
-          <div style="font-size:13px;font-weight:800;color:#1A8C6E">Rapports de match</div>
-          <div style="font-size:11px;color:#9A7A70;margin-top:2px">Stats mêlées/touches et analyses — visibles par les joueurs</div>
+          <div style="font-size:14px;font-weight:800;color:#1A8C6E">Rapports de match</div>
+          <div style="font-size:11px;color:#9A7A70;margin-top:2px">Stats mêlées/touches — visibles par les joueurs</div>
         </div>
         <span style="color:#1A8C6E;font-size:20px">›</span>
       </div>
     </div>
+
     <div class="sec-title">🧠 Débrief de la semaine</div>
     <div class="card" style="background:#2E86AB08;border-color:#2E86AB33">
-      <div style="font-size:12px;color:#9A7A70;margin-bottom:10px">Semaine analysée : du <strong>${start}</strong> au <strong>${end}</strong></div>
-      <div style="display:flex;gap:8px;align-items:center;margin-bottom:8px">
-        <div class="field" style="flex:1;margin:0"><label style="font-size:11px">Choisir une autre semaine (dimanche de fin)</label>
-          <input class="input" type="date" id="debrief-week-end" value="${end}" style="font-size:12px"/>
-        </div>
+      <div style="font-size:12px;color:#9A7A70;margin-bottom:10px">Semaine du <strong>${start}</strong> au <strong>${end}</strong></div>
+      <div class="field" style="margin:0 0 10px"><label style="font-size:11px">Autre semaine (dimanche de fin)</label>
+        <input class="input" type="date" id="debrief-week-end" value="${end}" style="font-size:12px"/>
       </div>
-      <button onclick="generateDebrief()" id="debrief-btn" style="width:100%;background:#2E86AB;color:#fff;border:none;border-radius:10px;padding:13px;font-weight:800;font-size:14px">🧠 GÉNÉRER LE DÉBRIEF</button>
+      <button onclick="generateDebrief()" id="debrief-btn" style="width:100%;background:#2E86AB;color:#fff;border:none;border-radius:10px;padding:14px;font-weight:800;font-size:15px">🧠 GÉNÉRER LE DÉBRIEF</button>
     </div>
     <div id="debrief-result"></div>
-    <div class="sec-title" style="margin-top:20px">👥 Retours individuels des joueurs</div>
-    <div class="card" style="background:#2E86AB08;border-color:#2E86AB22">
-      <div style="font-size:11px;color:#9A7A70;line-height:1.5;margin-bottom:10px">Retours des joueurs sur les événements de la semaine sélectionnée. Triés par ressenti croissant — clique sur un joueur pour voir ses notes.</div>
-      <button onclick="loadIndividualBilans()" id="load-bilans-btn" style="width:100%;background:#2E86AB;color:#fff;border:none;border-radius:8px;padding:9px;font-weight:700;font-size:12px">📋 Charger les retours individuels</button>
+
+    <div class="sec-title" style="margin-top:24px">👥 Retours individuels</div>
+    <div class="card">
+      <div style="font-size:11px;color:#9A7A70;margin-bottom:10px">Triés par ressenti croissant.</div>
+      <button onclick="loadIndividualBilans()" id="load-bilans-btn" style="width:100%;background:#FFFFFF;color:#2E86AB;border:1px solid #2E86AB55;border-radius:8px;padding:9px;font-weight:700;font-size:12px">📋 Charger les retours</button>
     </div>
     <div id="individual-bilans-list"></div>
-    <div class="sec-title" style="margin-top:20px">Historique des débriefs</div>
+
+    <div class="sec-title" style="margin-top:24px">Historique des débriefs</div>
     <div id="debriefs-history">Chargement...</div>
-    <div class="sec-title" style="margin-top:20px">📣 Nouvelle annonce</div>
-    <div class="card">
-      <div style="font-size:11px;color:#9A7A70;margin-bottom:8px;line-height:1.5">Message court visible par tous les joueurs et le staff de l'équipe.</div>
-      <textarea class="input" id="announcement-text" rows="2" placeholder="Ex: RDV 10h au club dimanche, tenue de match obligatoire"></textarea>
-      <button onclick="publishAnnouncement()" style="width:100%;background:#2E86AB;color:#fff;border:none;border-radius:10px;padding:11px;font-weight:800;font-size:13px;margin-top:8px">📣 PUBLIER L'ANNONCE</button>
-    </div>
-    <div class="sec-title">Annonces récentes</div>
-    <div id="announcements-list">Chargement...</div>
   `;
   setTimeout(()=>{
-    loadAnnouncements(team.id);
     loadDebriefHistory(team.id);
   }, 0);
   return html;
