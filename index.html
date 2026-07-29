@@ -299,6 +299,66 @@ let exercisesLibrary = []; // Bibliothèque globale d'exercices
 let sessionSets = {}; // {exLabel: [{kg, reps, isPdc, isTimed}]} pour le formulaire en cours
 let sessionBlocs = []; // [{name: 'Bloc 1', exercises: ['Squat', 'Bench']}]
 let sessionExTempo = {}; // {exLabel: '3-1-2'} tempo excentrique-pause-concentrique par exercice
+
+// ── ÉCHAUFFEMENT & ORIENTATION DE SÉANCE MUSCU ──────────────────────────────
+// Orientation = simple étiquette, ne pré-remplit rien.
+const ZONE_TRAVAILLEE = [
+  {key:'haut',  label:'Haut du corps'},
+  {key:'bas',   label:'Bas du corps'},
+  {key:'mixte', label:'Mixte'},
+];
+// 5 sous-catégories fixes, identiques quelle que soit la zone. Chacune vide au départ.
+const ECHAUFFEMENT_CATS = [
+  {key:'jonglages',   label:'🤹 Jonglages'},
+  {key:'mobilite',    label:'🧘 Mobilité'},
+  {key:'automassage', label:'💆 Automassage'},
+  {key:'gainage',     label:'🧱 Gainage'},
+  {key:'cardio',      label:'🏃 Cardio'},
+];
+// Étiquette matériel facultative pour un exercice d'échauffement.
+const ECHAUFFEMENT_MATERIEL = ['Aucun / poids du corps','Élastique','Rouleau','Balle','Poulie','TRX','Vélo/cardio','Corde à sauter','Medecine ball','Haltères légers','Step/banc'];
+
+function emptyEchauffement(){ return {jonglages:[], mobilite:[], automassage:[], gainage:[], cardio:[]}; }
+// Tolère les anciens formats / données absentes (exercice = {nom, materiel}).
+function normalizeEchauffement(e){
+  const base = emptyEchauffement();
+  if(e && typeof e === 'object'){
+    ECHAUFFEMENT_CATS.forEach(c => {
+      if(Array.isArray(e[c.key])){
+        base[c.key] = e[c.key]
+          .map(x => (typeof x === 'string' ? {nom:x, materiel:''} : {nom:x?.nom||'', materiel:x?.materiel||''}))
+          .filter(x => x.nom);
+      }
+    });
+  }
+  return base;
+}
+function echauffementHasItems(e){ return ECHAUFFEMENT_CATS.some(c => (e?.[c.key]||[]).length); }
+// Récap compact de l'échauffement pour la fiche d'une séance enregistrée.
+function echauffementRecapHtml(e){
+  const n = normalizeEchauffement(e);
+  if(!echauffementHasItems(n)) return '';
+  let h = `<div style="font-size:11px;color:#D4841A;font-weight:700;letter-spacing:1px;margin-bottom:8px">🔥 ÉCHAUFFEMENT</div>`;
+  ECHAUFFEMENT_CATS.forEach(cat => {
+    const items = n[cat.key];
+    if(!items.length) return;
+    h += `<div class="prog-step"><span>${cat.label} — ${items.map(it => escHtml(it.nom) + (it.materiel ? ' <span style="color:#9A7A70">('+escHtml(it.materiel)+')</span>' : '')).join(', ')}</span></div>`;
+  });
+  return h;
+}
+// Texte lisible de l'échauffement (utilisé pour les séances proposées par le prépa).
+function echauffementToText(e){
+  if(!echauffementHasItems(e)) return '';
+  const blocks = ECHAUFFEMENT_CATS
+    .filter(c => (e[c.key]||[]).length)
+    .map(c => c.label + '\n' + e[c.key].map(it => '   • ' + it.nom + (it.materiel ? ' · ' + it.materiel : '')).join('\n'));
+  return '🔥 Échauffement\n' + blocks.join('\n');
+}
+
+// État du formulaire joueur (séance muscu)
+let _sessionZone = '';                          // orientation, étiquette seule
+let sessionEchauffement = emptyEchauffement();  // {cat: [{nom, materiel}]}
+let _echauffAddOpen = null;                      // catégorie dont le mini-formulaire d'ajout est ouvert
 let chronoInterval = null;
 let chronoSeconds = 0;
 let chronoRunning = false;
@@ -1706,6 +1766,7 @@ function renderSessionCard(s){
     ${s.type==="match"?`<div style="margin-top:8px">${s.adversaire?tag(C.muted,"vs "+s.adversaire):""}${s.score?tag(s.resultat==="V"?C.accent:s.resultat==="D"?C.red:C.muted,s.score):""}${s.poste?tag(C.blue,s.poste):""}</div>`:""}
     ${s.type==="kine"?`<div style="font-size:12px;color:${C.pink};margin-top:6px">🩺 ${s.kineZone||""}${s.kinePraticien?" · "+s.kinePraticien:""}</div>`:""}
     ${s.type==="terrain"&&s.focus?`<div style="font-size:12px;color:#9A7A70;margin-top:6px">🎯 ${s.focus}</div>`:""}
+    ${s.type==="muscu"&&s.zone_travaillee?`<div style="font-size:12px;color:#9A7A70;margin-top:6px">📍 ${ZONE_TRAVAILLEE.find(z=>z.key===s.zone_travaillee)?.label||escHtml(s.zone_travaillee)}</div>`:""}
     <div style="display:flex;justify-content:space-between;align-items:center;margin-top:8px">
       <div style="font-size:12px">${isPlanifiee ? '<span style="background:#2E86AB18;color:#2E86AB;font-size:11px;font-weight:700;padding:3px 8px;border-radius:20px">📋 Planifiée</span>' : RESSENTI[s.ressenti]||""}</div>
       ${s.notes&&!s.auto?`<div style="font-size:11px;color:#9A7A70;max-width:55%;text-align:right;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${s.notes}</div>`:""}
@@ -1717,7 +1778,9 @@ function renderSessionCard(s){
   </div>`;
 
   if(isExpanded && exArr.length){
-    html+=`<div class="prog-detail"><div style="font-size:11px;color:#9A7A70;font-weight:700;letter-spacing:1px;margin-bottom:8px">PROGRAMME</div>`;
+    html+=`<div class="prog-detail">`;
+    html+=echauffementRecapHtml(s.echauffement);
+    html+=`<div style="font-size:11px;color:#9A7A70;font-weight:700;letter-spacing:1px;margin-bottom:8px">PROGRAMME</div>`;
     if(s.muscuSets?.length){
       s.muscuSets.forEach((ms,i)=>{
         const detail = fmtMuscuSets(ms.sets);
@@ -2361,6 +2424,12 @@ let _prepaTargetType = 'joueurs'; // 'joueurs' ou 'postes'
 let _prepaTargetSelection = []; // ids joueurs ou clés de groupes de poste sélectionnés
 let _prepaSessionFormat = 'structure'; // 'structure', 'pdf', ou 'exercices'
 let _prepaExercices = {}; // {exLabel: {series, reps, charge, recup}}
+// Orientation + échauffement quand le prépa construit une séance muscu
+let _prepaZone = '';
+let _prepaEchauffement = emptyEchauffement();
+let _prepaEchauffAddOpen = null;
+// Conserve les champs texte (titre/date/notes/vidéo) entre deux re-render du formulaire prépa
+let _prepaDraft = {};
 
 function getPrepaTeam(){
   return myTeams.find(t => t.myRole === 'prepa');
@@ -4518,6 +4587,10 @@ function openPrepaSessionForm(){
   _prepaTargetSelection = [];
   _prepaSessionFormat = 'exercices';
   _prepaExercices = {};
+  _prepaZone = '';
+  _prepaEchauffement = emptyEchauffement();
+  _prepaEchauffAddOpen = null;
+  _prepaDraft = {};
   const html = `<div style="display:flex;justify-content:space-between;align-items:center">
     <div class="modal-title" style="margin-bottom:0">📋 NOUVELLE SÉANCE À ENVOYER</div>
     <span onclick="closePrepaSessionForm()" style="font-size:22px;color:#9A7A70;cursor:pointer;padding:4px 8px">×</span>
@@ -4536,6 +4609,16 @@ function closePrepaSessionForm(){
 function renderPrepaSessionFormFields(){
   const container = document.getElementById('prepa-session-form-fields');
   if(!container) return;
+
+  // Conserver les champs texte déjà saisis entre deux re-render (ajout d'exercice,
+  // d'échauffement, changement de zone ou de format).
+  const gv = (id, cur) => { const el = document.getElementById(id); return el ? el.value : (cur !== undefined ? cur : ''); };
+  _prepaDraft = {
+    titre: gv('ps-titre', _prepaDraft.titre),
+    date: gv('ps-date', _prepaDraft.date),
+    description: gv('ps-description', _prepaDraft.description),
+    video: gv('ps-video', _prepaDraft.video),
+  };
 
   let targetHtml = `<div class="field"><label>Destinataires</label>
     <div style="display:flex;gap:6px;margin-bottom:8px">
@@ -4557,8 +4640,8 @@ function renderPrepaSessionFormFields(){
   targetHtml += `</div>`;
 
   let html = `
-    <div class="field"><label>Titre de la séance</label><input class="input" id="ps-titre" placeholder="Ex: Séance force semaine 12"/></div>
-    <div class="field"><label>Date</label><input class="input" type="date" id="ps-date" value="${today()}"/></div>
+    <div class="field"><label>Titre de la séance</label><input class="input" id="ps-titre" placeholder="Ex: Séance force semaine 12" value="${escHtml(_prepaDraft.titre||'')}"/></div>
+    <div class="field"><label>Date</label><input class="input" type="date" id="ps-date" value="${_prepaDraft.date||today()}"/></div>
     ${targetHtml}
     <div class="field"><label>Format</label>
       <div style="display:flex;gap:6px;margin-bottom:8px">
@@ -4591,11 +4674,12 @@ function renderPrepaSessionFormFields(){
       <input class="input" type="text" id="ps-course-intensite" placeholder="Ex: 100-110% VMA, intensité maximale..."/>
     </div>
     <div class="field"><label>Notes complémentaires</label>
-      <textarea class="input" id="ps-description" rows="2" placeholder="Consignes supplémentaires..."></textarea>
+      <textarea class="input" id="ps-description" rows="2" placeholder="Consignes supplémentaires...">${escHtml(_prepaDraft.description||'')}</textarea>
     </div>`;
   } else if(_prepaSessionFormat === 'exercices'){
     const allEx = getAllExercises();
     const usedLabels = Object.keys(_prepaExercices);
+    html += renderPrepaZoneSelector() + renderPrepaEchauffementSection();
     html += `<div class="field"><label>Ajouter un exercice</label>
       <button onclick="openPrepaExerciseModal()" style="width:100%;background:#F5EEE8;border:1px solid #E8D8D0;border-radius:10px;padding:12px;font-weight:700;font-size:13px;color:#D4841A;text-align:left;display:flex;align-items:center;gap:8px"><span style="font-size:16px">🔍</span> Chercher un exercice...</button>
     </div>`;
@@ -4614,18 +4698,69 @@ function renderPrepaSessionFormFields(){
         </div>
       </div>`;
     });
-    html += `<div class="field"><label>Notes complémentaires (optionnel)</label><textarea class="input" id="ps-description" rows="2" placeholder="Consignes générales..."></textarea></div>`;
+    html += `<div class="field"><label>Notes complémentaires (optionnel)</label><textarea class="input" id="ps-description" rows="2" placeholder="Consignes générales...">${escHtml(_prepaDraft.description||'')}</textarea></div>`;
   } else if(_prepaSessionFormat === 'structure'){
-    html += `<div class="field"><label>Description / consignes</label><textarea class="input" id="ps-description" rows="4" placeholder="Détaille les exercices, séries, charges suggérées..."></textarea></div>`;
+    html += `<div class="field"><label>Description / consignes</label><textarea class="input" id="ps-description" rows="4" placeholder="Détaille les exercices, séries, charges suggérées...">${escHtml(_prepaDraft.description||'')}</textarea></div>`;
   } else if(_prepaSessionFormat === 'pdf'){
-    html += `<div class="field"><label>Description (optionnel)</label><textarea class="input" id="ps-description" rows="2" placeholder="Quelques mots sur la séance..."></textarea></div>
+    html += `<div class="field"><label>Description (optionnel)</label><textarea class="input" id="ps-description" rows="2" placeholder="Quelques mots sur la séance...">${escHtml(_prepaDraft.description||'')}</textarea></div>
     <div class="field"><label>Fichier PDF</label><input class="input" type="file" id="ps-pdf-file" accept="application/pdf"/></div>`;
   }
 
   // Lien vidéo optionnel, quel que soit le format (démo d'exercice, correction technique...)
-  html += `<div class="field"><label>▶️ Lien vidéo (YouTube, WeTransfer... — optionnel)</label><input class="input" id="ps-video" placeholder="https://..."/></div>`;
+  html += `<div class="field"><label>▶️ Lien vidéo (YouTube, WeTransfer... — optionnel)</label><input class="input" id="ps-video" placeholder="https://..." value="${escHtml(_prepaDraft.video||'')}"/></div>`;
 
   container.innerHTML = html;
+}
+
+// ── Orientation + échauffement côté préparateur ──────────────────────────────
+function renderPrepaZoneSelector(){
+  return `<div class="field">
+    <label>Zone travaillée (optionnel)</label>
+    <div style="display:flex;gap:6px">
+      ${ZONE_TRAVAILLEE.map(z=>`<button type="button" onclick="setPrepaZone('${z.key}')" style="flex:1;padding:10px 4px;border-radius:10px;border:2px solid ${_prepaZone===z.key?'#D4841A':'#E8D8D0'};background:${_prepaZone===z.key?'#D4841A18':'#F5EEE8'};font-size:12px;font-weight:700;color:${_prepaZone===z.key?'#D4841A':'#9A7A70'}">${z.label}</button>`).join('')}
+    </div>
+  </div>`;
+}
+function setPrepaZone(key){ _prepaZone = (_prepaZone===key ? '' : key); renderPrepaSessionFormFields(); }
+
+function renderPrepaEchauffementSection(){
+  let html = `<div style="background:#FFF6ED;border:2px solid #F0C89A;border-radius:14px;padding:14px;margin-bottom:14px">
+    <div style="font-size:14px;font-weight:800;color:#D4841A">🔥 Échauffement</div>
+    <div style="font-size:11px;color:#9A7A70;margin:2px 0 10px">Ajoute les exercices d'échauffement à faire avant la séance.</div>`;
+  ECHAUFFEMENT_CATS.forEach(cat => {
+    const items = _prepaEchauffement[cat.key] || [];
+    html += `<div style="margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:#1A0A0A;margin-bottom:6px">${cat.label}</div>`;
+    items.forEach((it, idx) => {
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#FFFFFF;border:1px solid #F0C89A;border-radius:8px;padding:8px 10px;margin-bottom:6px">
+        <div style="font-size:12px;font-weight:600;color:#1A0A0A;min-width:0">${escHtml(it.nom)}${it.materiel?` <span style="color:#9A7A70;font-weight:500">· ${escHtml(it.materiel)}</span>`:''}</div>
+        <button onclick="removePrepaEchauff('${cat.key}',${idx})" style="color:#C0392B;font-size:16px;background:none;border:none;cursor:pointer;flex-shrink:0">×</button>
+      </div>`;
+    });
+    if(_prepaEchauffAddOpen === cat.key){
+      html += renderEchauffAddForm(cat.key, 'confirmPrepaEchauff', 'cancelPrepaEchauff');
+    } else {
+      html += `<button onclick="openPrepaEchauff('${cat.key}')" style="width:100%;background:none;border:1px dashed #F0C89A;border-radius:8px;padding:8px;color:#D4841A;font-size:12px;font-weight:700">+ Ajouter</button>`;
+    }
+    html += `</div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+function openPrepaEchauff(cat){ _prepaEchauffAddOpen = cat; renderPrepaSessionFormFields(); }
+function cancelPrepaEchauff(){ _prepaEchauffAddOpen = null; renderPrepaSessionFormFields(); }
+function confirmPrepaEchauff(cat){
+  const nom = (document.getElementById('echauff-nom')?.value||'').trim();
+  if(!nom){ document.getElementById('echauff-nom')?.focus(); return; }
+  const materiel = document.getElementById('echauff-materiel')?.value || '';
+  if(!_prepaEchauffement[cat]) _prepaEchauffement[cat] = [];
+  _prepaEchauffement[cat].push({nom, materiel});
+  _prepaEchauffAddOpen = null;
+  renderPrepaSessionFormFields();
+}
+function removePrepaEchauff(cat, idx){
+  if(_prepaEchauffement[cat]) _prepaEchauffement[cat].splice(idx, 1);
+  renderPrepaSessionFormFields();
 }
 
 async function submitPrepaSession(){
@@ -4673,7 +4808,15 @@ async function submitPrepaSession(){
       if(ex.recup) parts.push(`récup: ${ex.recup}`);
       return `• ${label}${parts.length ? ' — ' + parts.join(', ') : ''}`;
     });
-    description = lignes.join('\n') + (description ? '\n\n' + description : '');
+    // Orientation + échauffement en tête (étiquette de zone puis bloc échauffement),
+    // puis les exercices, puis les notes libres du prépa.
+    const zoneLabel = ZONE_TRAVAILLEE.find(z => z.key === _prepaZone)?.label;
+    description = [
+      zoneLabel ? '📍 Zone travaillée : ' + zoneLabel : '',
+      echauffementToText(_prepaEchauffement),
+      lignes.join('\n'),
+      description
+    ].filter(Boolean).join('\n\n');
   }
 
   const video_url = document.getElementById('ps-video')?.value.trim() || null;
@@ -7590,7 +7733,12 @@ function openSessionForm(initial=null){
   sessionExTempo = {};
   _collapsedEx = new Set();
   _collapsedBlocs = new Set();
+  _sessionZone = '';
+  sessionEchauffement = emptyEchauffement();
+  _echauffAddOpen = null;
   if(initial?.type==='muscu'){
+    _sessionZone = initial?.zone_travaillee || '';
+    sessionEchauffement = normalizeEchauffement(initial?.echauffement);
     const savedBlocs = initial?.blocs || initial?.data?.blocs;
     if(savedBlocs?.length) sessionBlocs = JSON.parse(JSON.stringify(savedBlocs));
     // Cas 1 : séance avec muscuSets (données de charges)
@@ -7661,7 +7809,7 @@ function renderSessionForm(preserveScroll){
           </button>`).join('')}
         </div>
       </div>` : '';
-    extra = posteBtn + renderMuscuForm(bycat, selected);
+    extra = renderZoneSelector() + renderEchauffementSection() + posteBtn + renderMuscuForm(bycat, selected);
   }
   else if(t==='course') extra=`<div class="field"><label>Format de course</label>
     <select class="input" id="f_course_format">
@@ -8272,6 +8420,72 @@ function duplicatePastSession(sid){
   showToast('Séance du ' + fmt(s.date) + ' reprise — ajuste tes charges !', 'success');
 }
 
+// ── Orientation de séance (étiquette) — joueur ───────────────────────────────
+function renderZoneSelector(){
+  return `<div class="field">
+    <label>Zone travaillée (optionnel)</label>
+    <div style="display:flex;gap:6px">
+      ${ZONE_TRAVAILLEE.map(z=>`<button type="button" onclick="setSessionZone('${z.key}')" style="flex:1;padding:10px 4px;border-radius:10px;border:2px solid ${_sessionZone===z.key?'#8B1A1A':'#E8D8D0'};background:${_sessionZone===z.key?'#8B1A1A18':'#F5EEE8'};font-size:12px;font-weight:700;color:${_sessionZone===z.key?'#8B1A1A':'#9A7A70'}">${z.label}</button>`).join('')}
+    </div>
+  </div>`;
+}
+function setSessionZone(key){ _sessionZone = (_sessionZone===key ? '' : key); saveFormFieldsAndRender(); }
+
+// ── Section échauffement (5 catégories fixes, exercices libres) — joueur ─────
+function renderEchauffementSection(){
+  let html = `<div style="background:#FFF6ED;border:2px solid #F0C89A;border-radius:14px;padding:14px;margin-bottom:14px">
+    <div style="font-size:14px;font-weight:800;color:#D4841A">🔥 Échauffement</div>
+    <div style="font-size:11px;color:#9A7A70;margin:2px 0 10px">Ajoute tes propres exercices dans chaque catégorie.</div>`;
+  ECHAUFFEMENT_CATS.forEach(cat => {
+    const items = sessionEchauffement[cat.key] || [];
+    html += `<div style="margin-bottom:10px">
+      <div style="font-size:12px;font-weight:700;color:#1A0A0A;margin-bottom:6px">${cat.label}</div>`;
+    items.forEach((it, idx) => {
+      html += `<div style="display:flex;justify-content:space-between;align-items:center;gap:8px;background:#FFFFFF;border:1px solid #F0C89A;border-radius:8px;padding:8px 10px;margin-bottom:6px">
+        <div style="font-size:12px;font-weight:600;color:#1A0A0A;min-width:0">${escHtml(it.nom)}${it.materiel?` <span style="color:#9A7A70;font-weight:500">· ${escHtml(it.materiel)}</span>`:''}</div>
+        <button onclick="removeEchauffement('${cat.key}',${idx})" style="color:#C0392B;font-size:16px;background:none;border:none;cursor:pointer;flex-shrink:0">×</button>
+      </div>`;
+    });
+    if(_echauffAddOpen === cat.key){
+      html += renderEchauffAddForm(cat.key, 'confirmAddEchauffement', 'cancelAddEchauffement');
+    } else {
+      html += `<button onclick="openAddEchauffement('${cat.key}')" style="width:100%;background:none;border:1px dashed #F0C89A;border-radius:8px;padding:8px;color:#D4841A;font-size:12px;font-weight:700">+ Ajouter</button>`;
+    }
+    html += `</div>`;
+  });
+  html += `</div>`;
+  return html;
+}
+// Mini-formulaire d'ajout partagé joueur/prépa (nom + matériel optionnel)
+function renderEchauffAddForm(catKey, confirmFn, cancelFn){
+  return `<div style="background:#FFFFFF;border:1px dashed #F0C89A;border-radius:8px;padding:10px;margin-bottom:6px">
+    <input class="input" id="echauff-nom" placeholder="Nom de l'exercice" style="margin-bottom:8px"/>
+    <select class="input" id="echauff-materiel" style="margin-bottom:8px">
+      <option value="">Matériel (optionnel)...</option>
+      ${ECHAUFFEMENT_MATERIEL.map(m=>`<option value="${m}">${m}</option>`).join('')}
+    </select>
+    <div style="display:flex;gap:6px">
+      <button onclick="${confirmFn}('${catKey}')" style="flex:1;background:#D4841A;color:#fff;border:none;border-radius:8px;padding:9px;font-size:12px;font-weight:700">Ajouter</button>
+      <button onclick="${cancelFn}()" style="background:#F5EEE8;border:1px solid #E8D8D0;border-radius:8px;padding:9px 14px;font-size:12px;font-weight:700;color:#9A7A70">Annuler</button>
+    </div>
+  </div>`;
+}
+function openAddEchauffement(cat){ _echauffAddOpen = cat; saveFormFieldsAndRender(); }
+function cancelAddEchauffement(){ _echauffAddOpen = null; saveFormFieldsAndRender(); }
+function confirmAddEchauffement(cat){
+  const nom = (document.getElementById('echauff-nom')?.value||'').trim();
+  if(!nom){ document.getElementById('echauff-nom')?.focus(); return; }
+  const materiel = document.getElementById('echauff-materiel')?.value || '';
+  if(!sessionEchauffement[cat]) sessionEchauffement[cat] = [];
+  sessionEchauffement[cat].push({nom, materiel});
+  _echauffAddOpen = null;
+  saveFormFieldsAndRender();
+}
+function removeEchauffement(cat, idx){
+  if(sessionEchauffement[cat]) sessionEchauffement[cat].splice(idx, 1);
+  saveFormFieldsAndRender();
+}
+
 function renderMuscuForm(bycat, selected){
   let html = `<div class="field">
     ${renderPastMuscuPicker()}
@@ -8585,6 +8799,9 @@ function demarrerSeancePlanifiee(sessionId){
   sessionExTempo = {};
   _collapsedEx = new Set();
   _collapsedBlocs = new Set();
+  _sessionZone = s.zone_travaillee || '';
+  sessionEchauffement = normalizeEchauffement(s.echauffement);
+  _echauffAddOpen = null;
   if(s.type === 'muscu' && s.muscuSets?.length){
     s.muscuSets.forEach(ms => {
       sessionSets[ms.exLabel] = ms.sets || [{kg:'',reps:''}];
@@ -9402,7 +9619,9 @@ async function submitSession(){
       const exObj = getAllExercises().find(e=>e.label===exLabel);
       if(exObj) muscuSetsToSave.push({exId: exObj.id, exLabel, sets, tempo: sessionExTempo[exLabel]||undefined});
     }
-    extra={exercices, muscuSets: muscuSetsToSave, blocs: sessionBlocs.length ? sessionBlocs : undefined};
+    extra={exercices, muscuSets: muscuSetsToSave, blocs: sessionBlocs.length ? sessionBlocs : undefined,
+      zone_travaillee: _sessionZone || undefined,
+      echauffement: echauffementHasItems(sessionEchauffement) ? sessionEchauffement : undefined};
   }
   else if(type==="match") extra={adversaire:document.getElementById("f_adversaire")?.value||'',score:document.getElementById("f_score")?.value||'',resultat:document.getElementById("f_resultat")?.value||'',poste:document.getElementById("f_poste")?.value||userPoste()};
   else if(type==="kine") extra={kineZone:document.getElementById("f_kinezone")?.value||'',kinePraticien:document.getElementById("f_kineprat")?.value||''};
@@ -9454,6 +9673,9 @@ async function submitSession(){
   sessionSets = {};
   sessionBlocs = [];
   sessionExTempo = {};
+  _sessionZone = '';
+  sessionEchauffement = emptyEchauffement();
+  _echauffAddOpen = null;
   // Prévenir le staff médical quand un joueur enregistre une séance soin
   // (nouvelle séance uniquement — pas à chaque modification)
   if(type === 'kine' && !wasEditing && newId){
