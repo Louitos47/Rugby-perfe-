@@ -294,6 +294,7 @@ let matches = [];
 let chargesLog = [];
 let autoSessions = [];
 let formeLog = [];
+let _formeSelectedDate = null; // date du bilan de forme affiché/édité (défaut = aujourd'hui)
 let customExercises = []; // Exercices custom chargés depuis Supabase
 let exercisesLibrary = []; // Bibliothèque globale d'exercices
 let sessionSets = {}; // {exLabel: [{kg, reps, isPdc, isTimed}]} pour le formulaire en cours
@@ -7050,7 +7051,11 @@ async function submitKineSession(){
 function renderForme(){
   if(!formeLog) formeLog = [];
   const today_str = today();
-  const f = formeLog.find(x => x.date === today_str) || {};
+  if(!_formeSelectedDate || _formeSelectedDate > today_str) _formeSelectedDate = today_str;
+  const selDate = _formeSelectedDate;
+  const f = formeLog.find(x => x.date === selDate) || {};
+  const yesterdayStr = addDays(today_str, -1);
+  const selLabel = new Date(selDate + 'T00:00:00').toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'});
 
   function ratingRow(key, label, emoji, options, color){
     const val = f[key] || 0;
@@ -7069,13 +7074,13 @@ function renderForme(){
   const eau = f.eau || 0;
 
   let html = `<div class="card">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <div style="font-size:15px;font-weight:800">Bilan du jour</div>
-      <div style="font-size:12px;color:#9A7A70">${new Date().toLocaleDateString('fr-FR',{weekday:'long',day:'numeric',month:'long'})}</div>
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;gap:8px;flex-wrap:wrap">
+      <div style="font-size:15px;font-weight:800">Bilan du ${selLabel}</div>
+      <input type="date" class="input" id="forme-date" max="${today_str}" value="${selDate}" onchange="setFormeDate(this.value)" style="width:auto;font-size:12px;padding:7px 10px"/>
     </div>
-    <div style="background:#2E86AB0C;border-radius:10px;padding:10px 12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center">
+    <div onclick="setFormeDate('${yesterdayStr}')" style="background:#2E86AB0C;border-radius:10px;padding:10px 12px;margin-bottom:14px;display:flex;justify-content:space-between;align-items:center;cursor:pointer;border:1px solid ${selDate===yesterdayStr?'#2E86AB55':'transparent'}">
       <div style="font-size:12px;font-weight:700;color:#2E86AB">🌙 Bilan d'hier</div>
-      <div style="font-size:11px;color:#9A7A70">À remplir le matin</div>
+      <div style="font-size:11px;color:#9A7A70">${selDate===yesterdayStr?'Jour sélectionné':'Toucher pour remplir ›'}</div>
     </div>
     ${ratingRow('sommeil','Qualite du sommeil','😴',[{icon:'😴',label:'Tres mal'},{icon:'😐',label:'Mal'},{icon:'🙂',label:'Correct'},{icon:'😊',label:'Bien'},{icon:'🌟',label:'Excellent'}],'#7B2D8B')}
     ${ratingRow('alimentation','Alimentation','🥗',[{icon:'🍟',label:'Tres mal'},{icon:'😬',label:'Mal'},{icon:'🙂',label:'Correct'},{icon:'🥗',label:'Bien'},{icon:'💚',label:'Parfait'}],'#1A8C6E')}
@@ -7122,7 +7127,7 @@ function renderForme(){
 
   <div class="sec-title">7 derniers jours</div>`;
 
-  const recent = formeLog.slice(0,7);
+  const recent = [...formeLog].sort((a,b) => (b.date||'').localeCompare(a.date||'')).slice(0,7);
   if(!recent.length){
     html += `<div class="card" style="text-align:center;padding:30px;color:#9A7A70">Aucune donnee encore.</div>`;
   } else {
@@ -7173,14 +7178,22 @@ function medicalAlertOnce(key, message){
   alertMedicalStaff(message);
 }
 
+// Change la date du bilan de forme affiché (jamais dans le futur)
+function setFormeDate(d){
+  if(!d) return;
+  const t = today();
+  _formeSelectedDate = d > t ? t : d;
+  render();
+}
+
 async function saveForme(key, val){
   if(!currentUser) return;
-  const today_str = today();
-  const existing = formeLog.find(f => f.date === today_str);
-  const newData = existing ? {...existing, [key]: val} : {date: today_str, user_id: currentUser.id, [key]: val};
+  const dateStr = _formeSelectedDate || today();
+  const existing = formeLog.find(f => f.date === dateStr);
+  const newData = existing ? {...existing, [key]: val} : {date: dateStr, user_id: currentUser.id, [key]: val};
   if(existing?.id){
     await sb.from('forme').update({[key]: val}).eq('id', existing.id);
-    formeLog = formeLog.map(f => f.date === today_str ? {...f, [key]: val} : f);
+    formeLog = formeLog.map(f => f.date === dateStr ? {...f, [key]: val} : f);
   } else {
     const {data} = await sb.from('forme').insert(newData).select().single();
     if(data) formeLog = [data, ...formeLog];
@@ -7188,13 +7201,16 @@ async function saveForme(key, val){
   // Confirmation visuelle que la sauvegarde a bien eu lieu
   showToast('Bilan de forme sauvegardé ✓', 'success');
 
-  // Signaux d'alerte pour le staff médical
-  if(key === 'courbatures' && val >= 4){
-    medicalAlertOnce('courbatures', userName() + ' signale des douleurs fortes (' + val + '/5) dans son bilan du jour');
-  } else if(key === 'fatigue' && val <= 1){
-    medicalAlertOnce('fatigue', userName() + ' signale une énergie très basse (batterie vide 🪫) dans son bilan du jour');
-  } else if(key === 'sommeil' && val <= 1){
-    medicalAlertOnce('sommeil', userName() + ' signale un très mauvais sommeil dans son bilan du jour');
+  // Signaux d'alerte pour le staff médical — uniquement pour le bilan du jour même,
+  // pas lors de la correction d'un jour passé.
+  if(dateStr === today()){
+    if(key === 'courbatures' && val >= 4){
+      medicalAlertOnce('courbatures', userName() + ' signale des douleurs fortes (' + val + '/5) dans son bilan du jour');
+    } else if(key === 'fatigue' && val <= 1){
+      medicalAlertOnce('fatigue', userName() + ' signale une énergie très basse (batterie vide 🪫) dans son bilan du jour');
+    } else if(key === 'sommeil' && val <= 1){
+      medicalAlertOnce('sommeil', userName() + ' signale un très mauvais sommeil dans son bilan du jour');
+    }
   }
   render();
 }
