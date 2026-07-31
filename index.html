@@ -813,6 +813,19 @@ async function saveProfile(prefs){
 }
 
 // ── AUTH SCREENS ──────────────────────────────────────────────────────────────
+// Versions des documents légaux acceptés à l'inscription (traçabilité RGPD).
+// À faire évoluer à chaque nouvelle version publiée des CGU / Politique de confidentialité.
+const CGU_VERSION = '2026-08-01';
+const CONFIDENTIALITE_VERSION = '2026-08-01';
+
+// Active le bouton d'inscription uniquement quand les deux consentements sont cochés
+function updateSignupConsent(){
+  const cgu = document.getElementById('signup-consent-cgu')?.checked;
+  const med = document.getElementById('signup-consent-medical')?.checked;
+  const btn = document.getElementById('signup-btn');
+  if(btn) btn.disabled = !(cgu && med);
+}
+
 function renderAuthScreen(){
   const app = document.getElementById('app');
   const subtitle = _portalChoice === 'staff' ? "Espace staff — manager, préparateur, médical" : _portalChoice === 'joueur' ? "Ton suivi de performance rugbystique" : "Ton suivi de performance rugbystique";
@@ -838,7 +851,16 @@ function renderAuthScreen(){
         <div class="auth-field"><label>Nom de famille</label><input class="auth-input" id="signup-nomfamille" placeholder="Ex: Dupont"/></div>
         <div class="auth-field"><label>Email</label><input class="auth-input" type="email" id="signup-email" placeholder="ton@email.com"/></div>
         <div class="auth-field"><label>Mot de passe</label><input class="auth-input" type="password" id="signup-pwd" placeholder="8 caractères min." onkeydown="if(event.key==='Enter')doSignup()"/></div>
-        <button class="auth-btn" id="signup-btn" onclick="doSignup()">CRÉER MON COMPTE</button>
+        <div style="font-size:11.5px;color:#D4841A;background:#D4841A14;border:1px solid #D4841A44;border-radius:8px;padding:8px 10px;margin:2px 0 12px;line-height:1.45">⚠️ Si tu as moins de 15 ans, l'accord d'un parent ou responsable légal est nécessaire.</div>
+        <label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#4A3A34;margin-bottom:10px;line-height:1.45;cursor:pointer">
+          <input type="checkbox" id="signup-consent-cgu" onchange="updateSignupConsent()" style="margin-top:2px;flex-shrink:0;width:16px;height:16px"/>
+          <span>J'accepte les <a href="https://rugbyperf.netlify.app/cgu" target="_blank" rel="noopener" style="color:#2E86AB;font-weight:700;text-decoration:underline">Conditions Générales d'Utilisation</a> et la <a href="https://rugbyperf.netlify.app/confidentialite" target="_blank" rel="noopener" style="color:#2E86AB;font-weight:700;text-decoration:underline">Politique de confidentialité</a>.</span>
+        </label>
+        <label style="display:flex;gap:8px;align-items:flex-start;font-size:12px;color:#4A3A34;margin-bottom:14px;line-height:1.45;cursor:pointer">
+          <input type="checkbox" id="signup-consent-medical" onchange="updateSignupConsent()" style="margin-top:2px;flex-shrink:0;width:16px;height:16px"/>
+          <span>J'accepte que mes données de santé (blessures, suivi médical) soient traitées dans le cadre du suivi de mon équipe, conformément à la Politique de confidentialité.</span>
+        </label>
+        <button class="auth-btn" id="signup-btn" onclick="doSignup()" disabled>CRÉER MON COMPTE</button>
         <div id="signup-msg"></div>
       </div>
     </div>
@@ -882,10 +904,32 @@ async function doSignup(){
   const pwd = document.getElementById('signup-pwd').value;
   const btn = document.getElementById('signup-btn');
   const msg = document.getElementById('signup-msg');
+  const consentCgu = document.getElementById('signup-consent-cgu')?.checked;
+  const consentMed = document.getElementById('signup-consent-medical')?.checked;
   if(!nom||!email||!pwd){ msg.className='auth-err'; msg.textContent='Remplis tous les champs.'; return; }
   if(pwd.length < 6){ msg.className='auth-err'; msg.textContent='Mot de passe trop court (6 min).'; return; }
+  if(!consentCgu || !consentMed){
+    msg.className='auth-err';
+    msg.textContent='Merci de cocher les deux cases de consentement pour créer ton compte.';
+    return;
+  }
+  // Traçabilité RGPD : horodatage + versions des documents acceptés
+  const consent = {
+    accepted_at: new Date().toISOString(),
+    cgu_version: CGU_VERSION,
+    confidentialite_version: CONFIDENTIALITE_VERSION,
+    medical: true
+  };
+  try { localStorage.setItem('rp_pending_consent', JSON.stringify(consent)); } catch(e){}
   btn.disabled=true; btn.textContent='Création...';
-  const {data, error} = await sb.auth.signUp({email, password: pwd});
+  // On enregistre aussi le consentement dans les métadonnées auth (capturées dès
+  // l'inscription, même si la confirmation email est en attente).
+  const {data, error} = await sb.auth.signUp({email, password: pwd, options: {data: {
+    rgpd_consent_at: consent.accepted_at,
+    rgpd_cgu_version: consent.cgu_version,
+    rgpd_confidentialite_version: consent.confidentialite_version,
+    rgpd_medical_consent: true
+  }}});
   if(error){ msg.className='auth-err'; msg.textContent=error.message; btn.disabled=false; btn.textContent='CRÉER MON COMPTE'; return; }
   currentUser = data.user;
 
@@ -906,6 +950,15 @@ async function doSignup(){
   // ex: confirmation email désactivée sur le projet)
   const nomFamille = document.getElementById('signup-nomfamille')?.value.trim() || '';
   await sb.from('profiles').upsert({id: currentUser.id, nom, nom_famille: nomFamille, email});
+  // Écriture du consentement à part : si les colonnes RGPD n'existent pas encore
+  // (migration non appliquée), la création de compte n'est pas bloquée pour autant.
+  const {error: consentErr} = await sb.from('profiles').update({
+    rgpd_consent_at: consent.accepted_at,
+    rgpd_cgu_version: consent.cgu_version,
+    rgpd_confidentialite_version: consent.confidentialite_version,
+    rgpd_medical_consent: true
+  }).eq('id', currentUser.id);
+  if(!consentErr){ try { localStorage.removeItem('rp_pending_consent'); } catch(e){} }
   msg.className='auth-ok'; msg.textContent='Compte créé ! Bienvenue '+nom+' 🎉';
   let pendingInvite = null;
   try { pendingInvite = localStorage.getItem('rp_pending_invite'); } catch(e){}
@@ -9886,9 +9939,30 @@ function renderLoading(){
 }
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
+// Reporte le consentement RGPD recueilli à l'inscription vers le profil, dans le
+// cas où la confirmation email était activée (aucune session active au signup :
+// le consentement est appliqué au premier vrai login).
+async function applyPendingConsent(){
+  if(!currentUser) return;
+  let pending = null;
+  try { pending = JSON.parse(localStorage.getItem('rp_pending_consent') || 'null'); } catch(e){}
+  if(!pending) return;
+  try {
+    await sb.from('profiles').upsert({
+      id: currentUser.id,
+      rgpd_consent_at: pending.accepted_at,
+      rgpd_cgu_version: pending.cgu_version,
+      rgpd_confidentialite_version: pending.confidentialite_version,
+      rgpd_medical_consent: !!pending.medical
+    });
+    localStorage.removeItem('rp_pending_consent');
+  } catch(e){}
+}
+
 async function initApp(){
   renderLoading();
   await loadAllData();
+  await applyPendingConsent();
   if(!userProfile?.nom){
     renderProfileSetup();
   } else if(!userProfile?.onboarding_done){
